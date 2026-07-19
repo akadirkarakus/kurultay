@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { BackgroundMusic } from "@/components/shared/BackgroundMusic";
 import "./globals.css";
 
 // Local pixel-art font (not Google Fonts) — a scalable TrueType remake of the
@@ -25,7 +26,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr" className={`${pixelFont.variable} h-full`}>
-      <body className="min-h-full flex flex-col bg-dominant text-secondary">{children}</body>
+      <body className="min-h-full flex flex-col bg-dominant text-secondary">
+        {children}
+        <BackgroundMusic />
+      </body>
     </html>
   );
 }
