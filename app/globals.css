@@ -1,26 +1,45 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Pixel-art theme font: a single local VGA-text-mode remake used
+     everywhere (body, headings, buttons, numbers) — DOS UIs never mixed
+     fonts either, so one face for every token keeps it authentic. */
+  --font-sans: var(--font-pixel);
+  --font-mono: var(--font-pixel);
+  --font-display: var(--font-pixel);
+
+  /* Light theme palette (60% dominant / 30% secondary / 10% accent). */
+  --color-dominant: #fcf2ee;
+  --color-dominant-soft: #f4e2d8;
+  --color-surface: #ffffff;
+  --color-secondary: #562710;
+  --color-secondary-soft: #8a5540;
+  --color-secondary-muted: #b08b76;
+  --color-line: #e8d3c4;
+  --color-accent: #ff8a4f;
+  --color-accent-soft: #ffe3cf;
+  --color-success: #2f9e44;
+  --color-success-soft: #dff3e1;
+  --color-danger: #c1443a;
+  --color-danger-soft: #fbe1dd;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  /* Fluid root size: every Tailwind rem-based utility (text-*, p-*, gap-*,
+     max-w-*, h-*, w-*, ...) scales off this, so the whole UI grows smoothly
+     between a phone (this game's primary target) and a desktop window
+     instead of looking tiny and lost on a large monitor. Unchanged at
+     narrow widths (clamps to the standard 16px below ~400px), scales up to
+     22px by ~1000px and wider. */
+  html {
+    font-size: clamp(16px, 1vw + 12px, 22px);
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* This VGA-remake font renders noticeably smaller than a normal UI font
+     at the same font-size, so the body baseline is bumped up to stay
+     legible. */
+  body {
+    font-size: 1.2rem;
+    line-height: 1.5;
+  }
 }
