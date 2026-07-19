@@ -47,8 +47,8 @@ export default function HomePage() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-16">
       <div className="text-center">
-        <h1 className="font-display text-3xl tracking-wide">Kurultay</h1>
-        <p className="mt-3 text-secondary-soft">Karakterini seç, senaryoyu kazan.</p>
+        <h1 className="font-display text-6xl tracking-wide">Kurultay</h1>
+        <p className="mt-3 text-secondary-soft">Karakterlerini seç, dünyayı kurtar.</p>
       </div>
 
       <div className="w-full max-w-sm space-y-4">

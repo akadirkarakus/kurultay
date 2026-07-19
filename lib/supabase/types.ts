@@ -59,6 +59,11 @@ export interface Database {
           score: number;
           is_ready: boolean;
           joined_at: string;
+          joker_used: boolean;
+          used_joker_key: string | null;
+          joker_own_character_id: string | null;
+          joker_target_player_id: string | null;
+          debuffed_character_ids: string[];
         };
         Insert: Partial<Database["public"]["Tables"]["game_players"]["Row"]> & {
           game_id: string;
@@ -66,6 +71,26 @@ export interface Database {
           session_token: string;
         };
         Update: Partial<Database["public"]["Tables"]["game_players"]["Row"]>;
+        Relationships: [];
+      };
+      jokers: {
+        Row: {
+          id: string;
+          key: string;
+          name: string;
+          description: string;
+          needs_own_character: boolean;
+          needs_target_player: boolean;
+          sort_order: number;
+        };
+        Insert: Partial<Database["public"]["Tables"]["jokers"]["Row"]> & {
+          key: string;
+          name: string;
+          description: string;
+          needs_own_character: boolean;
+          needs_target_player: boolean;
+        };
+        Update: Partial<Database["public"]["Tables"]["jokers"]["Row"]>;
         Relationships: [];
       };
       rounds: {
@@ -76,8 +101,12 @@ export interface Database {
           scenario_text: string;
           key_attributes: string[];
           deadline_at: string | null;
-          status: "picking" | "resolving" | "resolved";
+          status: "joker_window" | "picking" | "resolving" | "resolved";
           winner_commentary: string | null;
+          continue_deadline_at: string | null;
+          continue_ready_player_ids: string[];
+          joker_deadline_at: string | null;
+          joker_skipped_player_ids: string[];
         };
         Insert: Partial<Database["public"]["Tables"]["rounds"]["Row"]> & {
           game_id: string;
@@ -128,6 +157,9 @@ export interface Database {
           score: number;
           is_ready: boolean;
           joined_at: string;
+          joker_used: boolean;
+          used_joker_key: string | null;
+          joker_target_player_id: string | null;
         };
         Relationships: [];
       };
@@ -143,6 +175,24 @@ export interface Database {
       };
       submit_draft_pick: {
         Args: { p_player_id: string; p_step_number: number; p_character_id: string };
+        Returns: boolean;
+      };
+      mark_continue_ready: {
+        Args: { p_round_id: string; p_player_id: string };
+        Returns: boolean;
+      };
+      use_joker: {
+        Args: {
+          p_round_id: string;
+          p_player_id: string;
+          p_joker_key: string;
+          p_own_character_id: string | null;
+          p_target_player_id: string | null;
+        };
+        Returns: Json | null;
+      };
+      skip_joker: {
+        Args: { p_round_id: string; p_player_id: string };
         Returns: boolean;
       };
     };

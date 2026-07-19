@@ -3,28 +3,47 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { api } from "@/lib/client/api";
-import { RESULT_DISPLAY_S } from "@/lib/constants";
+import { CONTINUE_WINDOW_S } from "@/lib/constants";
 import { attributeLabel, isBattleAttributeKey } from "@/lib/attributes";
+import { PickWaitingBanner } from "@/components/shared/PickWaitingBanner";
+import { CountdownBar } from "@/components/shared/CountdownBar";
 
 export function RoundResultScreen({ gameId }: { gameId: string }) {
   const state = useGameStore((s) => s.state)!;
   const round = state.round;
-  // This component remounts per round (see the `key` in GameClient), so a
-  // plain initializer is enough to reset the countdown for each new result.
-  const [remaining, setRemaining] = useState(RESULT_DISPLAY_S);
+  const continueDeadlineAt = round && "continueDeadlineAt" in round ? round.continueDeadlineAt : null;
+
+  // Lazy initializer, not a setState-in-effect call — correct on first render
+  // because this component remounts per round (see the `key` in GameClient),
+  // so a fresh deadline always means a fresh mount.
+  const [remainingMs, setRemainingMs] = useState<number | null>(() =>
+    continueDeadlineAt ? Math.max(0, new Date(continueDeadlineAt).getTime() - Date.now()) : null,
+  );
+  const [clicked, setClicked] = useState(false);
 
   useEffect(() => {
+    if (!continueDeadlineAt) return;
+    const deadline = new Date(continueDeadlineAt).getTime();
     const interval = setInterval(() => {
-      setRemaining((r) => Math.max(0, r - 1));
-    }, 1000);
+      setRemainingMs(Math.max(0, deadline - Date.now()));
+    }, 250);
     return () => clearInterval(interval);
-  }, []);
+  }, [continueDeadlineAt]);
 
   useEffect(() => {
-    if (remaining === 0) {
+    // Once our cosmetic countdown hits zero, ask the server to advance — it
+    // independently re-checks the real deadline, so this can't be used to
+    // shortcut the wait even if a client's clock is off. Acts purely as a
+    // fallback: the normal path is every player clicking "Devam et".
+    if (remainingMs === 0) {
       api.continueGame(gameId).catch(() => {});
     }
-  }, [remaining, gameId]);
+  }, [remainingMs, gameId]);
+
+  function handleContinueClick() {
+    setClicked(true);
+    api.markContinueReady(gameId).catch(() => setClicked(false));
+  }
 
   if (!round || !("picks" in round)) {
     return (
@@ -33,6 +52,14 @@ export function RoundResultScreen({ gameId }: { gameId: string }) {
       </main>
     );
   }
+
+  // Merge in our own click optimistically so the waiting banner and button
+  // update instantly, without waiting for the continue_ready_submitted
+  // broadcast round-trip back to ourselves.
+  const readyPlayerIds = clicked
+    ? [...new Set([...round.continueReadyPlayerIds, state.me.id])]
+    : round.continueReadyPlayerIds;
+  const iAmReady = readyPlayerIds.includes(state.me.id);
 
   const maxAverage = Math.max(...round.picks.map((p) => p.average ?? 0));
   const playerById = new Map(state.players.map((p) => [p.id, p]));
@@ -98,7 +125,18 @@ export function RoundResultScreen({ gameId }: { gameId: string }) {
         </ul>
       </div>
 
-      <p className="text-center text-sm text-secondary-muted">{remaining}s sonra devam edilecek…</p>
+      <div className="mx-auto flex w-full max-w-xs flex-col items-center gap-3">
+        <button
+          type="button"
+          onClick={handleContinueClick}
+          disabled={iAmReady}
+          className="w-full rounded-none border-2 border-secondary bg-accent px-4 py-2 text-secondary shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none disabled:opacity-60"
+        >
+          {iAmReady ? "Bekleniyor…" : "Devam et"}
+        </button>
+        <PickWaitingBanner players={state.players} pickedPlayerIds={readyPlayerIds} />
+        <CountdownBar remainingMs={remainingMs} durationS={CONTINUE_WINDOW_S} />
+      </div>
     </main>
   );
 }

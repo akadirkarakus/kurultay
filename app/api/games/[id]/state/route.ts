@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requirePlayer } from "@/lib/server/auth";
 import { withApiErrorHandling } from "@/lib/errors";
+import { JOKERS, jokerByKey } from "@/lib/jokers";
 
 export const GET = withApiErrorHandling(
   async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -15,13 +16,28 @@ export const GET = withApiErrorHandling(
       .eq("game_id", gameId);
     if (playersError) throw playersError;
 
-    const playersOut = (players ?? []).map((p) => ({
-      id: p.id,
-      nickname: p.nickname,
-      score: p.score,
-      isReady: p.is_ready,
-      isHost: p.id === game.host_player_id,
-    }));
+    const nicknameById = new Map((players ?? []).map((p) => [p.id, p.nickname]));
+
+    const playersOut = (players ?? []).map((p) => {
+      const jokerDef = p.used_joker_key ? jokerByKey(p.used_joker_key) : undefined;
+      return {
+        id: p.id,
+        nickname: p.nickname,
+        score: p.score,
+        isReady: p.is_ready,
+        isHost: p.id === game.host_player_id,
+        jokerUsed: p.joker_used,
+        usedJoker: jokerDef
+          ? {
+              key: jokerDef.key,
+              name: jokerDef.name,
+              targetNickname: p.joker_target_player_id
+                ? (nicknameById.get(p.joker_target_player_id) ?? null)
+                : null,
+            }
+          : null,
+      };
+    });
 
     let round: unknown = null;
     if (game.current_round > 0) {
@@ -41,7 +57,41 @@ export const GET = withApiErrorHandling(
           .eq("player_id", player.id)
           .maybeSingle();
 
-        if (roundRow.status === "picking") {
+        if (roundRow.status === "joker_window") {
+          const { data: myDeckCharacters } = await admin
+            .from("characters")
+            .select("id, name, category, image_url, attributes")
+            .in("id", player.deck.length > 0 ? player.deck : ["00000000-0000-0000-0000-000000000000"]);
+
+          const decidedPlayerIds = (players ?? [])
+            .filter(
+              (p) => p.joker_used || (roundRow.joker_skipped_player_ids ?? []).includes(p.id),
+            )
+            .map((p) => p.id);
+
+          round = {
+            roundNumber: roundRow.round_number,
+            scenarioText: roundRow.scenario_text,
+            keyAttributes: roundRow.key_attributes,
+            status: roundRow.status,
+            jokerDeadlineAt: roundRow.joker_deadline_at,
+            myJokerAvailable: !player.joker_used,
+            myDecidedThisRound:
+              player.joker_used || (roundRow.joker_skipped_player_ids ?? []).includes(player.id),
+            decidedPlayerIds,
+            availableJokers: JOKERS.map((j) => ({
+              key: j.key,
+              name: j.name,
+              description: j.description,
+              needsOwnCharacter: j.needsOwnCharacter,
+              needsTargetPlayer: j.needsTargetPlayer,
+            })),
+            myDeck: myDeckCharacters ?? [],
+            opponents: (players ?? [])
+              .filter((p) => p.id !== player.id)
+              .map((p) => ({ id: p.id, nickname: p.nickname })),
+          };
+        } else if (roundRow.status === "picking") {
           // Secrecy (§3.5): expose *who* has picked, never *what* they picked.
           const { data: pickedRows } = await admin
             .from("round_picks")
@@ -83,6 +133,8 @@ export const GET = withApiErrorHandling(
               isAutoPick: p.is_auto_pick,
             })),
             winnerCommentary: roundRow.winner_commentary,
+            continueDeadlineAt: roundRow.continue_deadline_at,
+            continueReadyPlayerIds: roundRow.continue_ready_player_ids,
           };
         }
       }

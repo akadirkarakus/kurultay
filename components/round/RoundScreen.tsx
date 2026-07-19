@@ -10,6 +10,7 @@ import { CharacterCard } from "@/components/CharacterCard";
 import { PickWaitingBanner } from "@/components/shared/PickWaitingBanner";
 import { CountdownBar } from "@/components/shared/CountdownBar";
 import { attributeLabel, isBattleAttributeKey } from "@/lib/attributes";
+import { JokerWindowScreen } from "@/components/round/JokerWindowScreen";
 
 export function RoundScreen({ gameId }: { gameId: string }) {
   const state = useGameStore((s) => s.state)!;
@@ -52,6 +53,10 @@ export function RoundScreen({ gameId }: { gameId: string }) {
   } = useOptimisticPick(myServerPick, async (id) => {
     await api.submitPick(gameId, id);
   });
+
+  if (round?.status === "joker_window") {
+    return <JokerWindowScreen gameId={gameId} />;
+  }
 
   if (!round || round.status !== "picking") {
     return (

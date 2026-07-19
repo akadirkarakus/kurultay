@@ -52,6 +52,20 @@ export const api = {
     request<{ ok: true }>(`/api/games/${gameId}/resolve`, { method: "POST" }),
   continueGame: (gameId: string) =>
     request<{ ok: true }>(`/api/games/${gameId}/continue`, { method: "POST" }),
+  markContinueReady: (gameId: string) =>
+    request<{ ok: true }>(`/api/games/${gameId}/continue-ready`, { method: "POST" }),
+  useJoker: (
+    gameId: string,
+    body: { jokerKey: string; ownCharacterId?: string; targetPlayerId?: string },
+  ) =>
+    request<{ ok: true }>(`/api/games/${gameId}/joker-use`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  skipJoker: (gameId: string) =>
+    request<{ ok: true }>(`/api/games/${gameId}/joker-skip`, { method: "POST" }),
+  resolveJokerWindow: (gameId: string) =>
+    request<{ ok: true }>(`/api/games/${gameId}/joker-resolve`, { method: "POST" }),
   getState: (gameId: string) => request<GameStateResponse>(`/api/games/${gameId}/state`),
 };
 

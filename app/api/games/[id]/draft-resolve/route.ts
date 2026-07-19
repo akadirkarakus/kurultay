@@ -4,6 +4,11 @@ import { requirePlayer } from "@/lib/server/auth";
 import { autoFillDraftStragglers, maybeAdvanceDraftStep } from "@/lib/server/draft";
 import { ApiError, withApiErrorHandling } from "@/lib/errors";
 
+// maybeAdvanceDraftStep can transitively call startNextRound -> getKeyAttributes
+// (up to 2 sequential DeepSeek calls) once the last category step is picked —
+// 60s is Vercel Hobby's max configurable duration, well above the ~20s worst case.
+export const maxDuration = 60;
+
 export const POST = withApiErrorHandling(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id: gameId } = await params;

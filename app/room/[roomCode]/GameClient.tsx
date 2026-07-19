@@ -47,6 +47,10 @@ export function GameClient({ gameId }: { gameId: string; roomCode: string }) {
       .on("broadcast", { event: "pick_submitted" }, () => refresh())
       .on("broadcast", { event: "draft_pick_submitted" }, () => refresh())
       .on("broadcast", { event: "round_resolved" }, () => refresh())
+      .on("broadcast", { event: "continue_ready_submitted" }, () => refresh())
+      .on("broadcast", { event: "joker_used" }, () => refresh())
+      .on("broadcast", { event: "joker_skipped" }, () => refresh())
+      .on("broadcast", { event: "joker_window_closed" }, () => refresh())
       .on("presence", { event: "sync" }, () => {
         const presenceState = channel.presenceState<PresencePayload>();
         const ids = new Set(Object.values(presenceState).flat().map((p) => p.playerId));

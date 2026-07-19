@@ -12,7 +12,8 @@
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "import:characters": "tsx scripts/import-characters.ts",
-    "seed:scenarios": "tsx scripts/seed-scenarios.ts"
+    "seed:scenarios": "tsx scripts/seed-scenarios.ts",
+    "seed:jokers": "tsx scripts/seed-jokers.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

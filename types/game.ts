@@ -14,6 +14,8 @@ export interface PlayerSummary {
   score: number;
   isReady: boolean;
   isHost: boolean;
+  jokerUsed: boolean;
+  usedJoker: { key: string; name: string; targetNickname: string | null } | null;
 }
 
 export interface MeSummary {
@@ -61,9 +63,33 @@ export interface RoundViewResolved {
   myPick: string | null;
   picks: RoundPickReveal[];
   winnerCommentary: string | null;
+  continueDeadlineAt: string | null;
+  continueReadyPlayerIds: string[];
 }
 
-export type RoundView = RoundViewPicking | RoundViewResolved;
+export interface JokerCatalogEntry {
+  key: string;
+  name: string;
+  description: string;
+  needsOwnCharacter: boolean;
+  needsTargetPlayer: boolean;
+}
+
+export interface RoundViewJokerWindow {
+  roundNumber: number;
+  scenarioText: string;
+  keyAttributes: string[];
+  status: "joker_window";
+  jokerDeadlineAt: string | null;
+  myJokerAvailable: boolean;
+  myDecidedThisRound: boolean;
+  decidedPlayerIds: string[];
+  availableJokers: JokerCatalogEntry[];
+  myDeck: CharacterSummary[];
+  opponents: { id: string; nickname: string }[];
+}
+
+export type RoundView = RoundViewPicking | RoundViewResolved | RoundViewJokerWindow;
 
 export interface DraftView {
   stepNumber: number;

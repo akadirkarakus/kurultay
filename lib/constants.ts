@@ -9,8 +9,14 @@ export const DRAFT_STEP_DURATION_S = 30;
 
 export const ROUND_COUNT = 4;
 export const ROUND_DURATION_S = 30;
-export const RESULT_DISPLAY_S = 8;
+/** Seconds the round-result screen waits for every player to click "Devam et" before auto-advancing. */
+export const CONTINUE_WINDOW_S = 45;
 export const KEY_ATTRIBUTES_PER_ROUND = 5;
+
+/** Seconds a round's joker window stays open before auto-closing into normal picking. */
+export const JOKER_WINDOW_DURATION_S = 20;
+/** +/-8% attribute modifier applied by value_boost/value_debuff jokers at score time. */
+export const JOKER_VALUE_MODIFIER = 0.08;
 
 export const AI_TIMEOUT_MS = 10_000;
 

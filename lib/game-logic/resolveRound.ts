@@ -1,8 +1,14 @@
+import { JOKER_VALUE_MODIFIER } from "@/lib/constants";
+
 export interface RoundPickInput {
   playerId: string;
   characterId: string;
   /** The character's full attribute map (battle attributes only). */
   attributes: Record<string, number>;
+  /** True if this pick's card was boosted by the value_boost joker. */
+  boosted?: boolean;
+  /** True if this pick's card was debuffed by the value_debuff joker. */
+  debuffed?: boolean;
 }
 
 export interface RoundPickResult {
@@ -29,7 +35,10 @@ export function computeRoundResult(
       }
       return total + value;
     }, 0);
-    return { ...pick, average: sum / keyAttributes.length };
+    let average = sum / keyAttributes.length;
+    if (pick.boosted) average *= 1 + JOKER_VALUE_MODIFIER;
+    if (pick.debuffed) average *= 1 - JOKER_VALUE_MODIFIER;
+    return { ...pick, average };
   });
 
   const maxAverage = Math.max(...withAverages.map((p) => p.average));
