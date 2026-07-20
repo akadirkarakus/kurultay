@@ -30,7 +30,7 @@ begin
   for v_player_id, v_offer in select * from jsonb_each(p_offers)
   loop
     update game_players
-    set draft_offer = array(select jsonb_array_elements_text(v_offer))
+    set draft_offer = array(select jsonb_array_elements_text(v_offer))::uuid[]
     where id = v_player_id::uuid and game_id = p_game_id;
   end loop;
 
