@@ -25,6 +25,7 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
   const [selectedJoker, setSelectedJoker] = useState<JokerCatalogEntry | null>(null);
   const [ownCharacterId, setOwnCharacterId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [skipped, setSkipped] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,11 +74,13 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
   }
 
   async function skip() {
+    setSkipped(true);
     setError(null);
     try {
       await api.skipJoker(gameId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "İşlem başarısız.");
+      setSkipped(false);
     }
   }
 
@@ -105,7 +108,7 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
     submit(selectedJoker.key, ownCharacterId, targetPlayerId);
   }
 
-  const waitingOnly = !round.myJokerAvailable || round.myDecidedThisRound || submitted;
+  const waitingOnly = !round.myJokerAvailable || round.myDecidedThisRound || submitted || skipped;
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-4 py-8">
@@ -136,22 +139,24 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
             : "Jokerin yok. Diğer oyuncular bekleniyor…"}
         </p>
       ) : !selectedJoker ? (
-        <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
-          {round.availableJokers.map((joker) => (
-            <button
-              key={joker.key}
-              type="button"
-              onClick={() => chooseJoker(joker)}
-              className="rounded-none border-2 border-secondary bg-surface p-3 text-left transition hover:border-accent"
-            >
-              <p className="font-display text-xs tracking-wide">{joker.name}</p>
-              <p className="mt-1 text-sm text-secondary-soft">{joker.description}</p>
-            </button>
-          ))}
+        <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+          <div className="grid grid-cols-3 gap-3">
+            {round.availableJokers.map((joker) => (
+              <button
+                key={joker.key}
+                type="button"
+                onClick={() => chooseJoker(joker)}
+                className="aspect-[664/1083] overflow-hidden rounded-none border-2 border-secondary bg-surface shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform hover:border-accent active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={joker.imageUrl} alt={joker.name} className="h-full w-full object-contain" />
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             onClick={skip}
-            className="rounded-none border-2 border-line bg-dominant-soft px-4 py-2 text-secondary-soft"
+            className="rounded-none border-2 border-secondary bg-dominant-soft px-4 py-2 text-secondary-soft shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform hover:border-accent active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
           >
             Jokersiz devam et
           </button>

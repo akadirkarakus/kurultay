@@ -71,6 +71,7 @@ export interface JokerCatalogEntry {
   key: string;
   name: string;
   description: string;
+  imageUrl: string;
   needsOwnCharacter: boolean;
   needsTargetPlayer: boolean;
 }

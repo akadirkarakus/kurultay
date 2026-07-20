@@ -195,6 +195,16 @@ export interface Database {
         Args: { p_round_id: string; p_player_id: string };
         Returns: boolean;
       };
+      advance_draft_step: {
+        Args: {
+          p_game_id: string;
+          p_expected_current_step: number;
+          p_next_step: number;
+          p_deadline: string;
+          p_offers: Json;
+        };
+        Returns: boolean;
+      };
     };
   };
 }

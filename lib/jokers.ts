@@ -5,6 +5,7 @@ export interface JokerDefinition {
   key: JokerKey;
   name: string;
   description: string;
+  imageUrl: string;
   needsOwnCharacter: boolean;
   needsTargetPlayer: boolean;
 }
@@ -20,6 +21,7 @@ export const JOKERS: readonly JokerDefinition[] = [
     key: "card_swap",
     name: "Kart Çalma",
     description: "Destenden bir kart seç; rakibinin rastgele bir kartıyla takas edilsin.",
+    imageUrl: "/jokers/card-swap.png",
     needsOwnCharacter: true,
     needsTargetPlayer: true,
   },
@@ -27,6 +29,7 @@ export const JOKERS: readonly JokerDefinition[] = [
     key: "value_boost",
     name: "Değer Artırma",
     description: "Destenden bir kart seç; o kart oynandığında tüm özellikleri %8 artsın.",
+    imageUrl: "/jokers/value-boost.png",
     needsOwnCharacter: true,
     needsTargetPlayer: false,
   },
@@ -34,6 +37,7 @@ export const JOKERS: readonly JokerDefinition[] = [
     key: "value_debuff",
     name: "Değer Düşürme",
     description: "Bir rakip seç; rastgele bir kartının tüm özellikleri %8 düşsün.",
+    imageUrl: "/jokers/value-debuff.png",
     needsOwnCharacter: false,
     needsTargetPlayer: true,
   },

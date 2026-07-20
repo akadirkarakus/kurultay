@@ -54,10 +54,12 @@ export async function startDraft(admin: AdminClient, gameId: string): Promise<vo
 /**
  * Advances to the next category step (dealing fresh disjoint offers), or —
  * once all DECK_SIZE categories are done — starts round 1 via the existing
- * (already idempotent) startNextRound. CAS-guarded exactly like the
- * conditional-update pattern already used in /start and /continue: only the
- * first caller to see current_draft_step still at the old value deals
- * offers and bumps the counter.
+ * (already idempotent) startNextRound. The offer writes and the step bump
+ * happen inside a single locked transaction (advance_draft_step, a Postgres
+ * function using SELECT ... FOR UPDATE like resolve_round) so they become
+ * visible together — a client can never observe the new step number paired
+ * with a stale draft_offer, which previously happened when those were two
+ * separate sequential updates.
  */
 export async function advanceDraftStep(admin: AdminClient, gameId: string): Promise<void> {
   const { data: game, error: gameError } = await admin.from("games").select("*").eq("id", gameId).single();
@@ -73,19 +75,14 @@ export async function advanceDraftStep(admin: AdminClient, gameId: string): Prom
   const offers = await dealCategoryOffers(admin, gameId, category);
   const deadline = new Date(Date.now() + DRAFT_STEP_DURATION_S * 1000).toISOString();
 
-  const { data: updated, error: updateError } = await admin
-    .from("games")
-    .update({ current_draft_step: nextStep, draft_deadline_at: deadline })
-    .eq("id", gameId)
-    .eq("current_draft_step", nextStep - 1)
-    .select("id");
-  if (updateError) throw updateError;
-  if (!updated || updated.length === 0) return; // another caller already advanced
-
-  for (const [playerId, offer] of Object.entries(offers)) {
-    const { error } = await admin.from("game_players").update({ draft_offer: offer }).eq("id", playerId);
-    if (error) throw error;
-  }
+  const { error } = await admin.rpc("advance_draft_step", {
+    p_game_id: gameId,
+    p_expected_current_step: game.current_draft_step,
+    p_next_step: nextStep,
+    p_deadline: deadline,
+    p_offers: offers,
+  });
+  if (error) throw error;
 }
 
 /**

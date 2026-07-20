@@ -58,10 +58,11 @@ export const GET = withApiErrorHandling(
           .maybeSingle();
 
         if (roundRow.status === "joker_window") {
+          const myUnusedDeck = player.deck.filter((id) => !player.used_characters.includes(id));
           const { data: myDeckCharacters } = await admin
             .from("characters")
             .select("id, name, category, image_url, attributes")
-            .in("id", player.deck.length > 0 ? player.deck : ["00000000-0000-0000-0000-000000000000"]);
+            .in("id", myUnusedDeck.length > 0 ? myUnusedDeck : ["00000000-0000-0000-0000-000000000000"]);
 
           const decidedPlayerIds = (players ?? [])
             .filter(
@@ -83,6 +84,7 @@ export const GET = withApiErrorHandling(
               key: j.key,
               name: j.name,
               description: j.description,
+              imageUrl: j.imageUrl,
               needsOwnCharacter: j.needsOwnCharacter,
               needsTargetPlayer: j.needsTargetPlayer,
             })),
