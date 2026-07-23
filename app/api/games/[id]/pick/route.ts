@@ -5,9 +5,10 @@ import { requirePlayer } from "@/lib/server/auth";
 import { resolveRoundAndBroadcast } from "@/lib/server/rounds";
 import { ApiError, withApiErrorHandling } from "@/lib/errors";
 
-// Can transitively trigger up to 2 sequential DeepSeek calls (getWinnerCommentary
-// via resolveRoundAndBroadcast), each with its own AI_TIMEOUT_MS — 60s is
-// Vercel Hobby's max configurable duration, well above the ~20s worst case.
+// resolveRoundAndBroadcast no longer awaits getWinnerCommentary in the request
+// path (it's scheduled via next/server's after() once round_resolved is
+// broadcast) — this generous maxDuration just gives that background AI call
+// room to finish before the invocation is torn down.
 export const maxDuration = 60;
 
 export const POST = withApiErrorHandling(
@@ -55,19 +56,15 @@ export const POST = withApiErrorHandling(
     }
 
     // Broadcast only a "someone picked" signal — never the character itself —
-    // so opponents get a live checkmark with zero leakage during picking (§3.5).
-    await admin
-      .channel(`game:${gameId}`)
-      .send({ type: "broadcast", event: "pick_submitted", payload: { playerId: player.id } });
-
-    const { count: totalPlayers } = await admin
-      .from("game_players")
-      .select("*", { count: "exact", head: true })
-      .eq("game_id", gameId);
-    const { count: totalPicks } = await admin
-      .from("round_picks")
-      .select("*", { count: "exact", head: true })
-      .eq("round_id", round.id);
+    // so opponents get a live checkmark with zero leakage during picking
+    // (§3.5). Independent of the counts below, so it runs concurrently.
+    const [, { count: totalPlayers }, { count: totalPicks }] = await Promise.all([
+      admin
+        .channel(`game:${gameId}`)
+        .send({ type: "broadcast", event: "pick_submitted", payload: { playerId: player.id } }),
+      admin.from("game_players").select("*", { count: "exact", head: true }).eq("game_id", gameId),
+      admin.from("round_picks").select("*", { count: "exact", head: true }).eq("round_id", round.id),
+    ]);
 
     if ((totalPicks ?? 0) >= (totalPlayers ?? 0)) {
       await resolveRoundAndBroadcast(admin, gameId, round.id);

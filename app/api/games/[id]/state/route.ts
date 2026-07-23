@@ -8,12 +8,13 @@ export const GET = withApiErrorHandling(
   async (_req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
     const { id: gameId } = await params;
     const admin = supabaseAdmin();
-    const { game, player } = await requirePlayer(admin, gameId);
-
-    const { data: players, error: playersError } = await admin
-      .from("game_players_public")
-      .select("*")
-      .eq("game_id", gameId);
+    // game_players_public only needs gameId (known from the route param), not
+    // the authenticated player's identity, so it runs concurrently with auth
+    // instead of waiting on it.
+    const [{ game, player }, { data: players, error: playersError }] = await Promise.all([
+      requirePlayer(admin, gameId),
+      admin.from("game_players_public").select("*").eq("game_id", gameId),
+    ]);
     if (playersError) throw playersError;
 
     const nicknameById = new Map((players ?? []).map((p) => [p.id, p.nickname]));
@@ -26,6 +27,7 @@ export const GET = withApiErrorHandling(
         score: p.score,
         isReady: p.is_ready,
         isHost: p.id === game.host_player_id,
+        isBot: p.is_bot,
         jokerUsed: p.joker_used,
         usedJoker: jokerDef
           ? {
@@ -50,20 +52,23 @@ export const GET = withApiErrorHandling(
       if (roundError) throw roundError;
 
       if (roundRow) {
-        const { data: myPickRow } = await admin
-          .from("round_picks")
-          .select("character_id")
-          .eq("round_id", roundRow.id)
-          .eq("player_id", player.id)
-          .maybeSingle();
+        const myUnusedDeck = player.deck.filter((id) => !player.used_characters.includes(id));
+        const [{ data: myPickRow }, { data: myDeckCharacters }] = await Promise.all([
+          admin
+            .from("round_picks")
+            .select("character_id")
+            .eq("round_id", roundRow.id)
+            .eq("player_id", player.id)
+            .maybeSingle(),
+          roundRow.status === "joker_window"
+            ? admin
+                .from("characters")
+                .select("id, name, category, image_url, attributes")
+                .in("id", myUnusedDeck.length > 0 ? myUnusedDeck : ["00000000-0000-0000-0000-000000000000"])
+            : Promise.resolve({ data: null }),
+        ]);
 
         if (roundRow.status === "joker_window") {
-          const myUnusedDeck = player.deck.filter((id) => !player.used_characters.includes(id));
-          const { data: myDeckCharacters } = await admin
-            .from("characters")
-            .select("id, name, category, image_url, attributes")
-            .in("id", myUnusedDeck.length > 0 ? myUnusedDeck : ["00000000-0000-0000-0000-000000000000"]);
-
           const decidedPlayerIds = (players ?? [])
             .filter(
               (p) => p.joker_used || (roundRow.joker_skipped_player_ids ?? []).includes(p.id),
@@ -91,7 +96,7 @@ export const GET = withApiErrorHandling(
             myDeck: myDeckCharacters ?? [],
             opponents: (players ?? [])
               .filter((p) => p.id !== player.id)
-              .map((p) => ({ id: p.id, nickname: p.nickname })),
+              .map((p) => ({ id: p.id, nickname: p.nickname, isBot: p.is_bot })),
           };
         } else if (roundRow.status === "picking") {
           // Secrecy (§3.5): expose *who* has picked, never *what* they picked.
@@ -144,19 +149,18 @@ export const GET = withApiErrorHandling(
 
     let draft: unknown = null;
     if (game.status === "deck_selection") {
-      const { data: offerCharacters, error: offerError } = await admin
-        .from("characters")
-        .select("id, name, category, image_url, attributes")
-        .in(
-          "id",
-          player.draft_offer.length > 0 ? player.draft_offer : ["00000000-0000-0000-0000-000000000000"],
-        );
+      const [{ data: offerCharacters, error: offerError }, { data: allPlayers, error: allPlayersError }] =
+        await Promise.all([
+          admin
+            .from("characters")
+            .select("id, name, category, image_url, attributes")
+            .in(
+              "id",
+              player.draft_offer.length > 0 ? player.draft_offer : ["00000000-0000-0000-0000-000000000000"],
+            ),
+          admin.from("game_players").select("id, deck").eq("game_id", gameId),
+        ]);
       if (offerError) throw offerError;
-
-      const { data: allPlayers, error: allPlayersError } = await admin
-        .from("game_players")
-        .select("id, deck")
-        .eq("game_id", gameId);
       if (allPlayersError) throw allPlayersError;
 
       draft = {
@@ -181,6 +185,7 @@ export const GET = withApiErrorHandling(
         status: game.status,
         currentRound: game.current_round,
         maxRounds: game.max_rounds,
+        rematchReadyPlayerIds: game.rematch_ready_player_ids,
       },
       players: playersOut,
       me: {

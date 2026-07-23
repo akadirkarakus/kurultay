@@ -110,10 +110,19 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
 
   const waitingOnly = !round.myJokerAvailable || round.myDecidedThisRound || submitted || skipped;
 
+  // Merge in our own decision optimistically the instant submit()/skip() is
+  // clicked — submitted/skipped flip synchronously, before the request even
+  // starts — instead of waiting on the round trip through the server and
+  // back via the joker_used/joker_skipped broadcast.
+  const decidedPlayerIds =
+    submitted || skipped
+      ? [...new Set([...round.decidedPlayerIds, state.me.id])]
+      : round.decidedPlayerIds;
+
   return (
     <main className="flex flex-1 flex-col gap-6 px-4 py-8">
       <div className="mx-auto max-w-lg text-center">
-        <p className="text-sm text-secondary-muted">Round {round.roundNumber} — Joker Penceresi</p>
+        <p className="font-display text-xl font-bold tracking-wide text-secondary">Round {round.roundNumber} — Joker Penceresi</p>
         <p className="mt-2 text-lg">{round.scenarioText}</p>
         <div className="mt-3 flex flex-wrap justify-center gap-2">
           {round.keyAttributes.map((attr) => (
@@ -128,7 +137,7 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
         <CountdownBar remainingMs={remainingMs} durationS={JOKER_WINDOW_DURATION_S} />
       </div>
 
-      <PickWaitingBanner players={state.players} pickedPlayerIds={round.decidedPlayerIds} />
+      <PickWaitingBanner players={state.players} pickedPlayerIds={decidedPlayerIds} />
 
       {error && <p className="text-center text-sm text-danger">{error}</p>}
 
@@ -140,13 +149,19 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
         </p>
       ) : !selectedJoker ? (
         <div className="mx-auto flex w-full max-w-md flex-col gap-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="text-center">
+            <p className="font-display text-sm tracking-wide">Joker kullanmak istiyor musun?</p>
+            <p className="mt-1 text-xs text-secondary-muted">
+              Not: Her oyuncunun bir joker kullanma hakkı vardır.
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3">
             {round.availableJokers.map((joker) => (
               <button
                 key={joker.key}
                 type="button"
                 onClick={() => chooseJoker(joker)}
-                className="aspect-[664/1083] overflow-hidden rounded-none border-2 border-secondary bg-surface shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform hover:border-accent active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
+                className="aspect-[664/1083] w-[calc(33.333%-0.5rem)] overflow-hidden rounded-none border-2 border-secondary bg-surface shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform hover:border-accent active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={joker.imageUrl} alt={joker.name} className="h-full w-full object-contain" />
@@ -158,13 +173,15 @@ export function JokerWindowScreen({ gameId }: { gameId: string }) {
             onClick={skip}
             className="rounded-none border-2 border-secondary bg-dominant-soft px-4 py-2 text-secondary-soft shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform hover:border-accent active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
           >
-            Jokersiz devam et
+            Sonraki tura sakla
           </button>
         </div>
       ) : selectedJoker.needsOwnCharacter && ownCharacterId === null ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+        <div className="flex flex-wrap justify-center gap-3">
           {round.myDeck.map((c) => (
-            <CharacterCard key={c.id} character={c} onClick={() => chooseOwnCharacter(c.id)} />
+            <div key={c.id} className="w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.5rem)] md:w-[calc(20%-0.6rem)]">
+              <CharacterCard character={c} onClick={() => chooseOwnCharacter(c.id)} />
+            </div>
           ))}
         </div>
       ) : selectedJoker.needsTargetPlayer ? (

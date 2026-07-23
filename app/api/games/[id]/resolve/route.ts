@@ -4,9 +4,10 @@ import { requirePlayer } from "@/lib/server/auth";
 import { resolveRoundAndBroadcast } from "@/lib/server/rounds";
 import { ApiError, withApiErrorHandling } from "@/lib/errors";
 
-// Can transitively trigger up to 2 sequential DeepSeek calls (getWinnerCommentary
-// via resolveRoundAndBroadcast), each with its own AI_TIMEOUT_MS — 60s is
-// Vercel Hobby's max configurable duration, well above the ~20s worst case.
+// resolveRoundAndBroadcast no longer awaits getWinnerCommentary in the request
+// path (it's scheduled via next/server's after() once round_resolved is
+// broadcast) — this generous maxDuration just gives that background AI call
+// room to finish before the invocation is torn down.
 export const maxDuration = 60;
 
 export const POST = withApiErrorHandling(

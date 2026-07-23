@@ -1,5 +1,6 @@
 import "server-only";
 import { ROUND_DURATION_S } from "@/lib/constants";
+import { fillBotRoundPicks } from "@/lib/server/bots";
 import type { supabaseAdmin } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof supabaseAdmin>;
@@ -26,9 +27,15 @@ export async function closeJokerWindow(admin: AdminClient, gameId: string, round
     .update({ status: "picking", deadline_at: deadlineAt })
     .eq("id", roundId)
     .eq("status", "joker_window")
-    .select("id");
+    .select("id, key_attributes");
   if (error) throw error;
   if (!updated || updated.length === 0) return; // already closed by another caller
+
+  // Real picking has now opened — bots play their round pick immediately.
+  // Must complete (and commit) BEFORE the broadcast below: bot picks don't
+  // send their own signal, so a client refetching off this broadcast has to
+  // already see them as picked, or it'll never learn otherwise.
+  await fillBotRoundPicks(admin, gameId, updated[0]);
 
   await admin
     .channel(`game:${gameId}`)
@@ -44,14 +51,13 @@ export async function maybeCloseJokerWindow(
   gameId: string,
   roundId: string,
 ): Promise<void> {
-  const { data: round } = await admin
-    .from("rounds")
-    .select("status, joker_skipped_player_ids")
-    .eq("id", roundId)
-    .single();
+  // Both queries only need roundId/gameId, not each other's result, so they
+  // run concurrently instead of paying two sequential round trips.
+  const [{ data: round }, { data: players }] = await Promise.all([
+    admin.from("rounds").select("status, joker_skipped_player_ids").eq("id", roundId).single(),
+    admin.from("game_players").select("id, joker_used").eq("game_id", gameId),
+  ]);
   if (!round || round.status !== "joker_window") return;
-
-  const { data: players } = await admin.from("game_players").select("id, joker_used").eq("game_id", gameId);
 
   const allDecided = (players ?? []).every(
     (p) => p.joker_used || round.joker_skipped_player_ids.includes(p.id),

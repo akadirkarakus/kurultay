@@ -27,6 +27,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ nickname }),
     }),
+  createSinglePlayerGame: (nickname: string) =>
+    request<{ gameId: string; roomCode: string }>("/api/games/single-player", {
+      method: "POST",
+      body: JSON.stringify({ nickname }),
+    }),
   joinGame: (roomCode: string, nickname: string) =>
     request<{ gameId: string; roomCode: string }>("/api/games/join", {
       method: "POST",
@@ -66,6 +71,8 @@ export const api = {
     request<{ ok: true }>(`/api/games/${gameId}/joker-skip`, { method: "POST" }),
   resolveJokerWindow: (gameId: string) =>
     request<{ ok: true }>(`/api/games/${gameId}/joker-resolve`, { method: "POST" }),
+  markRematchReady: (gameId: string) =>
+    request<{ ok: true }>(`/api/games/${gameId}/rematch-ready`, { method: "POST" }),
   getState: (gameId: string) => request<GameStateResponse>(`/api/games/${gameId}/state`),
 };
 

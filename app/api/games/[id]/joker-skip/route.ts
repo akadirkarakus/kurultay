@@ -32,11 +32,13 @@ export const POST = withApiErrorHandling(
     const { error } = await admin.rpc("skip_joker", { p_round_id: round.id, p_player_id: player.id });
     if (error) throw error;
 
-    await admin
-      .channel(`game:${gameId}`)
-      .send({ type: "broadcast", event: "joker_skipped", payload: { playerId: player.id } });
-
-    await maybeCloseJokerWindow(admin, gameId, round.id);
+    // Independent of the window-close check below, so they run concurrently.
+    await Promise.all([
+      admin
+        .channel(`game:${gameId}`)
+        .send({ type: "broadcast", event: "joker_skipped", payload: { playerId: player.id } }),
+      maybeCloseJokerWindow(admin, gameId, round.id),
+    ]);
 
     return NextResponse.json({ ok: true });
   },

@@ -5,8 +5,9 @@ import { maybeAdvanceAfterRoundResult } from "@/lib/server/rounds";
 import { ApiError, withApiErrorHandling } from "@/lib/errors";
 
 // maybeAdvanceAfterRoundResult can trigger the same advanceRoundResult chain
-// as /continue (up to ~20s worst case per DeepSeek stage). 60s is Vercel
-// Hobby's max configurable duration.
+// as /continue (getKeyAttributes only, ~12s worst case — see that route's
+// comment). 60s is Vercel Hobby's max configurable duration, kept as a
+// generous ceiling for background commentary work triggered along the way.
 export const maxDuration = 60;
 
 export const POST = withApiErrorHandling(
@@ -36,10 +37,17 @@ export const POST = withApiErrorHandling(
     if (error) throw error;
 
     if (marked) {
-      await admin
-        .channel(`game:${gameId}`)
-        .send({ type: "broadcast", event: "continue_ready_submitted", payload: { playerId: player.id } });
-      await maybeAdvanceAfterRoundResult(admin, gameId, round.id);
+      // Independent of the advance check below, so they run concurrently.
+      // If it does advance, startNextRound/startTiebreakRound update the
+      // games row, which every client already watches via postgres_changes —
+      // so a client that refetches off this broadcast before that lands just
+      // self-corrects on the next signal.
+      await Promise.all([
+        admin
+          .channel(`game:${gameId}`)
+          .send({ type: "broadcast", event: "continue_ready_submitted", payload: { playerId: player.id } }),
+        maybeAdvanceAfterRoundResult(admin, gameId, round.id),
+      ]);
     }
 
     return NextResponse.json({ ok: true });

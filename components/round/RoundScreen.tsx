@@ -68,10 +68,17 @@ export function RoundScreen({ gameId }: { gameId: string }) {
 
   const usedSet = new Set(state.me.usedCharacters);
 
+  // Merge in our own pick optimistically — useOptimisticPick sets myPick
+  // synchronously on click, before the request even starts, so this shows
+  // our own checkmark instantly instead of waiting on the round trip through
+  // the server and back via the pick_submitted broadcast.
+  const pickedPlayerIds =
+    myPick !== null ? [...new Set([...round.pickedPlayerIds, state.me.id])] : round.pickedPlayerIds;
+
   return (
     <main className="flex flex-1 flex-col gap-6 px-4 py-8">
       <div className="mx-auto max-w-lg text-center">
-        <p className="text-sm text-secondary-muted">Round {round.roundNumber}</p>
+        <p className="font-display text-xl font-bold tracking-wide text-secondary">Round {round.roundNumber}</p>
         <p className="mt-2 text-lg">{round.scenarioText}</p>
         <div className="mt-3 flex flex-wrap justify-center gap-2">
           {round.keyAttributes.map((attr) => (
@@ -83,22 +90,23 @@ export function RoundScreen({ gameId }: { gameId: string }) {
         <CountdownBar remainingMs={remainingMs} durationS={ROUND_DURATION_S} />
       </div>
 
-      <PickWaitingBanner players={state.players} pickedPlayerIds={round.pickedPlayerIds} />
+      <PickWaitingBanner players={state.players} pickedPlayerIds={pickedPlayerIds} />
 
       {error && <p className="text-center text-sm text-danger">{error}</p>}
 
       {myPick !== null ? (
         <p className="text-center text-secondary-soft">Seçimin gönderildi. Diğer oyuncular bekleniyor…</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+        <div className="flex flex-wrap justify-center gap-3">
           {deckCharacters.map((c) => (
-            <CharacterCard
-              key={c.id}
-              character={c}
-              dimmed={usedSet.has(c.id)}
-              disabled={usedSet.has(c.id) || submitting}
-              onClick={() => pick(c.id)}
-            />
+            <div key={c.id} className="w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.5rem)] md:w-[calc(20%-0.6rem)]">
+              <CharacterCard
+                character={c}
+                dimmed={usedSet.has(c.id)}
+                disabled={usedSet.has(c.id) || submitting}
+                onClick={() => pick(c.id)}
+              />
+            </div>
           ))}
         </div>
       )}

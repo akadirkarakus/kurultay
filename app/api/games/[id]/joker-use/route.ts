@@ -43,12 +43,14 @@ export const POST = withApiErrorHandling(
 
     // Broadcast only a "someone used a joker" signal — the reveal of who used
     // what against whom comes from /state (game_players_public), matching the
-    // pick_submitted secrecy-preserving pattern used elsewhere.
-    await admin
-      .channel(`game:${gameId}`)
-      .send({ type: "broadcast", event: "joker_used", payload: { playerId: player.id } });
-
-    await maybeCloseJokerWindow(admin, gameId, round.id);
+    // pick_submitted secrecy-preserving pattern used elsewhere. Independent
+    // of the window-close check below, so they run concurrently.
+    await Promise.all([
+      admin
+        .channel(`game:${gameId}`)
+        .send({ type: "broadcast", event: "joker_used", payload: { playerId: player.id } }),
+      maybeCloseJokerWindow(admin, gameId, round.id),
+    ]);
 
     return NextResponse.json({ ok: true });
   },

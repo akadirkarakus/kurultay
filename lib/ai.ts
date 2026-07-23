@@ -8,7 +8,10 @@ function getDefaultClient(): OpenAI {
   if (defaultClient) return defaultClient;
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("Missing DEEPSEEK_API_KEY environment variable.");
-  defaultClient = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com" });
+  // maxRetries: 0 — the SDK's own default (2) retries would silently stack on
+  // top of getKeyAttributes/getWinnerCommentary's own 2-attempt retry logic,
+  // multiplying worst-case latency ~3x. This app manages retries itself.
+  defaultClient = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com", maxRetries: 0 });
   return defaultClient;
 }
 

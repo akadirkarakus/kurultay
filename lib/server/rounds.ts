@@ -1,9 +1,16 @@
 import "server-only";
+import { after } from "next/server";
 import { getKeyAttributes, getWinnerCommentary } from "@/lib/ai";
 import { CONTINUE_WINDOW_S, JOKER_WINDOW_DURATION_S, ROUND_COUNT, ROUND_DURATION_S } from "@/lib/constants";
 import { computeRoundResult } from "@/lib/game-logic/resolveRound";
 import { topScorers } from "@/lib/game-logic/tie";
 import { anyJokerAvailable } from "@/lib/server/jokers";
+import {
+  fillBotJokerDecisions,
+  fillBotRoundPicks,
+  markBotsContinueReady,
+  markBotsRematchReady,
+} from "@/lib/server/bots";
 import type { supabaseAdmin } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof supabaseAdmin>;
@@ -49,15 +56,19 @@ export async function startNextRound(admin: AdminClient, gameId: string): Promis
     ? new Date(now + JOKER_WINDOW_DURATION_S * 1000).toISOString()
     : null;
 
-  const { error: insertError } = await admin.from("rounds").insert({
-    game_id: gameId,
-    round_number: nextRoundNumber,
-    scenario_text: scenario.text,
-    key_attributes: keyAttributes,
-    deadline_at: deadlineAt,
-    status,
-    joker_deadline_at: jokerDeadlineAt,
-  });
+  const { data: round, error: insertError } = await admin
+    .from("rounds")
+    .insert({
+      game_id: gameId,
+      round_number: nextRoundNumber,
+      scenario_text: scenario.text,
+      key_attributes: keyAttributes,
+      deadline_at: deadlineAt,
+      status,
+      joker_deadline_at: jokerDeadlineAt,
+    })
+    .select()
+    .single();
 
   if (insertError) {
     if (insertError.code === "23505") return; // another caller already started this round
@@ -69,6 +80,15 @@ export async function startNextRound(admin: AdminClient, gameId: string): Promis
     .update({ status: "in_round", current_round: nextRoundNumber })
     .eq("id", gameId);
   if (updateError) throw updateError;
+
+  // Bots act the moment they have the information they need, rather than
+  // waiting on the human: skip their joker immediately if a window opened,
+  // or play their round pick immediately if picking opened straight away.
+  if (status === "joker_window") {
+    await fillBotJokerDecisions(admin, gameId, round.id);
+  } else {
+    await fillBotRoundPicks(admin, gameId, round);
+  }
 }
 
 /**
@@ -87,7 +107,13 @@ export async function startTiebreakRound(
 
   const nextRoundNumber = game.current_round + 1;
   const scenario = await pickUnusedScenario(admin, gameId);
-  const keyAttributes = await getKeyAttributes(scenario.text, scenario.suggested_attributes);
+  // No getKeyAttributes call here (unlike startNextRound): a tie-break has no
+  // picking phase for players to weigh against these attributes — it's
+  // resolved instantly below by auto-playing each tied player's last card —
+  // so the up-to-12s DeepSeek round trip would be pure added latency on the
+  // "Nihai Sonucu Gör" / advance path for zero gameplay benefit. The
+  // scenario's own pre-set suggestion is just as good here.
+  const keyAttributes = scenario.suggested_attributes;
 
   const { data: round, error: insertError } = await admin
     .from("rounds")
@@ -139,26 +165,26 @@ export async function resolveRoundAndBroadcast(
 }
 
 async function broadcastRoundResolved(admin: AdminClient, gameId: string, roundId: string): Promise<void> {
-  const { data: round, error: roundError } = await admin.from("rounds").select("*").eq("id", roundId).single();
+  const [{ data: round, error: roundError }, { data: picks, error: picksError }] = await Promise.all([
+    admin.from("rounds").select("*").eq("id", roundId).single(),
+    admin.from("round_picks").select("*").eq("round_id", roundId),
+  ]);
   if (roundError) throw roundError;
+  if (picksError) throw picksError;
 
   // Opens the round-result "Devam et" window the moment results become
   // visible. CAS-guarded so a redundant broadcastRoundResolved call (another
   // caller already resolved this round) never pushes the deadline back out.
-  if (round && round.continue_deadline_at === null) {
-    const continueDeadline = new Date(Date.now() + CONTINUE_WINDOW_S * 1000).toISOString();
-    await admin
-      .from("rounds")
-      .update({ continue_deadline_at: continueDeadline })
-      .eq("id", roundId)
-      .is("continue_deadline_at", null);
-  }
+  const continueDeadlineUpdate =
+    round && round.continue_deadline_at === null
+      ? admin
+          .from("rounds")
+          .update({ continue_deadline_at: new Date(Date.now() + CONTINUE_WINDOW_S * 1000).toISOString() })
+          .eq("id", roundId)
+          .is("continue_deadline_at", null)
+      : Promise.resolve();
 
-  const { data: picks, error: picksError } = await admin
-    .from("round_picks")
-    .select("*")
-    .eq("round_id", roundId);
-  if (picksError) throw picksError;
+  await Promise.all([continueDeadlineUpdate, markBotsContinueReady(admin, gameId, roundId)]);
 
   const characterIds = (picks ?? []).map((p) => p.character_id);
   const { data: characters, error: charactersError } = await admin
@@ -167,46 +193,6 @@ async function broadcastRoundResolved(admin: AdminClient, gameId: string, roundI
     .in("id", characterIds.length > 0 ? characterIds : ["00000000-0000-0000-0000-000000000000"]);
   if (charactersError) throw charactersError;
   const characterById = new Map((characters ?? []).map((c) => [c.id, c]));
-
-  if (round && round.winner_commentary === null && picks && picks.length > 0) {
-    const { data: players } = await admin
-      .from("game_players")
-      .select("id, nickname, used_joker_key, joker_own_character_id, debuffed_character_ids")
-      .eq("game_id", gameId);
-    const playerById = new Map((players ?? []).map((p) => [p.id, p.nickname]));
-    const jokerInfoById = new Map((players ?? []).map((p) => [p.id, p]));
-
-    const scored = computeRoundResult(
-      picks.map((p) => {
-        const jokerInfo = jokerInfoById.get(p.player_id);
-        return {
-          playerId: p.player_id,
-          characterId: p.character_id,
-          attributes: (characterById.get(p.character_id)?.attributes ?? {}) as Record<string, number>,
-          boosted:
-            jokerInfo?.used_joker_key === "value_boost" &&
-            jokerInfo?.joker_own_character_id === p.character_id,
-          debuffed: jokerInfo?.debuffed_character_ids?.includes(p.character_id) ?? false,
-        };
-      }),
-      round.key_attributes,
-    );
-    const commentaryPicks = scored.map((s) => ({
-      characterName: characterById.get(s.characterId)?.name ?? "?",
-      playerNickname: playerById.get(s.playerId) ?? "?",
-      average: s.average,
-      isWinner: s.isWinner,
-      isAutoPick: picks.find((p) => p.player_id === s.playerId)?.is_auto_pick ?? false,
-    }));
-
-    const commentary = await getWinnerCommentary(round.scenario_text, round.key_attributes, commentaryPicks);
-    // CAS guard: if a concurrent caller already wrote one, don't overwrite it.
-    await admin
-      .from("rounds")
-      .update({ winner_commentary: commentary })
-      .eq("id", roundId)
-      .is("winner_commentary", null);
-  }
 
   const payload = (picks ?? []).map((p) => ({
     playerId: p.player_id,
@@ -221,6 +207,64 @@ async function broadcastRoundResolved(admin: AdminClient, gameId: string, roundI
     event: "round_resolved",
     payload: { picks: payload },
   });
+
+  // Winner commentary never appears in the broadcast payload above — it's
+  // flavor text, not scoring data — so it's generated and persisted here,
+  // after the response is sent, instead of blocking every player's reveal on
+  // a DeepSeek round trip. RoundResultScreen already renders
+  // winnerCommentary conditionally, so a client that refetches before this
+  // lands simply shows no commentary yet; commentary_ready nudges it to
+  // refetch once it's ready.
+  if (round && round.winner_commentary === null && picks && picks.length > 0) {
+    after(async () => {
+      try {
+        const { data: players } = await admin
+          .from("game_players")
+          .select("id, nickname, used_joker_key, joker_own_character_id, debuffed_character_ids")
+          .eq("game_id", gameId);
+        const playerById = new Map((players ?? []).map((p) => [p.id, p.nickname]));
+        const jokerInfoById = new Map((players ?? []).map((p) => [p.id, p]));
+
+        const scored = computeRoundResult(
+          picks.map((p) => {
+            const jokerInfo = jokerInfoById.get(p.player_id);
+            return {
+              playerId: p.player_id,
+              characterId: p.character_id,
+              attributes: (characterById.get(p.character_id)?.attributes ?? {}) as Record<string, number>,
+              boosted:
+                jokerInfo?.used_joker_key === "value_boost" &&
+                jokerInfo?.joker_own_character_id === p.character_id,
+              debuffed: jokerInfo?.debuffed_character_ids?.includes(p.character_id) ?? false,
+            };
+          }),
+          round.key_attributes,
+        );
+        const commentaryPicks = scored.map((s) => ({
+          characterName: characterById.get(s.characterId)?.name ?? "?",
+          playerNickname: playerById.get(s.playerId) ?? "?",
+          average: s.average,
+          isWinner: s.isWinner,
+          isAutoPick: picks.find((p) => p.player_id === s.playerId)?.is_auto_pick ?? false,
+        }));
+
+        const commentary = await getWinnerCommentary(round.scenario_text, round.key_attributes, commentaryPicks);
+        // CAS guard: if a concurrent caller already wrote one, don't overwrite it.
+        const { error } = await admin
+          .from("rounds")
+          .update({ winner_commentary: commentary })
+          .eq("id", roundId)
+          .is("winner_commentary", null);
+        if (error) throw error;
+
+        await admin
+          .channel(`game:${gameId}`)
+          .send({ type: "broadcast", event: "commentary_ready", payload: {} });
+      } catch (error) {
+        console.error("broadcastRoundResolved: background commentary generation failed.", error);
+      }
+    });
+  }
 }
 
 /**
@@ -266,6 +310,8 @@ export async function advanceRoundResult(admin: AdminClient, gameId: string): Pr
     .eq("id", gameId)
     .eq("status", "round_result");
   if (finishError) throw finishError;
+
+  await markBotsRematchReady(admin, gameId);
 }
 
 /**
@@ -278,14 +324,14 @@ export async function maybeAdvanceAfterRoundResult(
   gameId: string,
   roundId: string,
 ): Promise<void> {
-  const { data: round } = await admin
-    .from("rounds")
-    .select("continue_ready_player_ids")
-    .eq("id", roundId)
-    .single();
+  // Both queries only need roundId/gameId, not each other's result, so they
+  // run concurrently instead of paying two sequential round trips.
+  const [{ data: round }, { data: players }] = await Promise.all([
+    admin.from("rounds").select("continue_ready_player_ids").eq("id", roundId).single(),
+    admin.from("game_players").select("id").eq("game_id", gameId),
+  ]);
   if (!round) return;
 
-  const { data: players } = await admin.from("game_players").select("id").eq("game_id", gameId);
   const allReady =
     (players ?? []).length > 0 &&
     (players ?? []).every((p) => round.continue_ready_player_ids.includes(p.id));

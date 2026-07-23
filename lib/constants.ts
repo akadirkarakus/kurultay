@@ -18,8 +18,11 @@ export const JOKER_WINDOW_DURATION_S = 20;
 /** +/-8% attribute modifier applied by value_boost/value_debuff jokers at score time. */
 export const JOKER_VALUE_MODIFIER = 0.08;
 
-export const AI_TIMEOUT_MS = 10_000;
+export const AI_TIMEOUT_MS = 6_000;
 
 export const ROOM_CODE_LENGTH = 6;
 /** Excludes 0/O/1/I/L to avoid visual ambiguity when players read codes aloud or type them. */
 export const ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+/** Fixed nicknames for the 2 AI bots seated in single-player mode. */
+export const BOT_NICKNAMES = ["Atlas", "Zeynep"] as const;

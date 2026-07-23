@@ -40,6 +40,9 @@ export interface Database {
           draft_categories: string[];
           current_draft_step: number;
           draft_deadline_at: string | null;
+          rematch_ready_player_ids: string[];
+          rematch_started_at: string | null;
+          is_single_player: boolean;
         };
         Insert: Partial<Database["public"]["Tables"]["games"]["Row"]> & {
           room_code: string;
@@ -64,6 +67,7 @@ export interface Database {
           joker_own_character_id: string | null;
           joker_target_player_id: string | null;
           debuffed_character_ids: string[];
+          is_bot: boolean;
         };
         Insert: Partial<Database["public"]["Tables"]["game_players"]["Row"]> & {
           game_id: string;
@@ -160,6 +164,7 @@ export interface Database {
           joker_used: boolean;
           used_joker_key: string | null;
           joker_target_player_id: string | null;
+          is_bot: boolean;
         };
         Relationships: [];
       };
@@ -203,6 +208,10 @@ export interface Database {
           p_deadline: string;
           p_offers: Json;
         };
+        Returns: boolean;
+      };
+      mark_rematch_ready: {
+        Args: { p_game_id: string; p_player_id: string };
         Returns: boolean;
       };
     };

@@ -18,6 +18,9 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
   if (gameError || !game) {
     throw new ApiError(404, "room_not_found", "No game found with that room code.");
   }
+  if (game.is_single_player) {
+    throw new ApiError(403, "single_player_game", "This is a single-player game and cannot be joined.");
+  }
   if (game.status !== "lobby") {
     throw new ApiError(409, "game_already_started", "This game has already started.");
   }
@@ -41,7 +44,7 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     throw playerError;
   }
 
-  await setSessionCookie(roomCode, sessionToken);
+  await setSessionCookie(game.id, sessionToken);
 
   // game_players has no anon SELECT policy, so Postgres Changes can't reach
   // it — broadcast instead so other lobby clients know to refetch /state.

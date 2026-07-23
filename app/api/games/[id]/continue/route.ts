@@ -4,10 +4,12 @@ import { requirePlayer } from "@/lib/server/auth";
 import { advanceRoundResult } from "@/lib/server/rounds";
 import { ApiError, withApiErrorHandling } from "@/lib/errors";
 
-// advanceRoundResult can transitively call startNextRound/startTiebreakRound
-// -> getKeyAttributes, and broadcastRoundResolved -> getWinnerCommentary (tie-break
-// path resolves+broadcasts in the same call) — up to 2 sequential DeepSeek chains,
-// each up to ~20s worst case. 60s is Vercel Hobby's max configurable duration.
+// advanceRoundResult can transitively call startNextRound/startTiebreakRound ->
+// getKeyAttributes (up to 2 sequential DeepSeek calls, each bounded by
+// AI_TIMEOUT_MS) — ~12s worst case. getWinnerCommentary no longer blocks this
+// path (scheduled via after() inside broadcastRoundResolved); 60s is Vercel
+// Hobby's max configurable duration, kept as a generous ceiling for that
+// background work.
 export const maxDuration = 60;
 
 // Safety-net fallback for CONTINUE_WINDOW_S: the room's client-side countdowns

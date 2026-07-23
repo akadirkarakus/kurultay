@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/client/api";
+import { HowToPlayButton } from "@/components/shared/HowToPlayModal";
 
 export default function HomePage() {
   const router = useRouter();
@@ -44,8 +45,25 @@ export default function HomePage() {
     }
   }
 
+  async function handleSinglePlayer() {
+    setError(null);
+    if (!nickname.trim()) {
+      setError("Lütfen bir takma ad girin.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { roomCode } = await api.createSinglePlayerGame(nickname.trim());
+      router.push(`/room/${roomCode}`);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Tek kişilik oyun başlatılamadı.");
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-16">
+      <HowToPlayButton />
       <div className="text-center">
         <h1 className="font-display text-6xl tracking-wide">Kurultay</h1>
         <p className="mt-3 text-secondary-soft">Karakterlerini seç, dünyayı kurtar.</p>
@@ -111,6 +129,14 @@ export default function HomePage() {
             className="w-full rounded-none border-2 border-secondary px-4 py-3 font-display text-xs tracking-wide text-secondary shadow-[4px_4px_0_0_var(--color-secondary)] transition-transform hover:bg-dominant-soft active:translate-x-[4px] active:translate-y-[4px] active:shadow-none"
           >
             {mode === "join" ? "Yeni oda oluştur" : "Oda koduyla katıl"}
+          </button>
+
+          <button
+            onClick={handleSinglePlayer}
+            disabled={loading}
+            className="w-full rounded-none border-2 border-secondary px-4 py-3 font-display text-xs tracking-wide text-secondary shadow-[4px_4px_0_0_var(--color-secondary)] transition-transform hover:bg-dominant-soft active:translate-x-[4px] active:translate-y-[4px] active:shadow-none disabled:opacity-50"
+          >
+            {loading ? "Başlatılıyor…" : "Tek Kişilik Mod"}
           </button>
         </div>
       </div>

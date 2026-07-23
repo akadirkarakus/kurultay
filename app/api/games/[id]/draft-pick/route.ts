@@ -6,8 +6,9 @@ import { maybeAdvanceDraftStep } from "@/lib/server/draft";
 import { ApiError, withApiErrorHandling } from "@/lib/errors";
 
 // maybeAdvanceDraftStep can transitively call startNextRound -> getKeyAttributes
-// (up to 2 sequential DeepSeek calls) once the last category step is picked —
-// 60s is Vercel Hobby's max configurable duration, well above the ~20s worst case.
+// (up to 2 sequential DeepSeek calls, each bounded by AI_TIMEOUT_MS) once the
+// last category step is picked — ~12s worst case; 60s is Vercel Hobby's max
+// configurable duration, kept as a generous ceiling.
 export const maxDuration = 60;
 
 export const POST = withApiErrorHandling(
@@ -36,11 +37,13 @@ export const POST = withApiErrorHandling(
 
     // Broadcast only a "someone picked" signal — never the character itself —
     // mirroring pick_submitted's secrecy-preserving pattern for round picks.
-    await admin
-      .channel(`game:${gameId}`)
-      .send({ type: "broadcast", event: "draft_pick_submitted", payload: { playerId: player.id } });
-
-    await maybeAdvanceDraftStep(admin, gameId);
+    // Independent of the step-advance check below, so they run concurrently.
+    await Promise.all([
+      admin
+        .channel(`game:${gameId}`)
+        .send({ type: "broadcast", event: "draft_pick_submitted", payload: { playerId: player.id } }),
+      maybeAdvanceDraftStep(admin, gameId),
+    ]);
 
     return NextResponse.json({ ok: true });
   },

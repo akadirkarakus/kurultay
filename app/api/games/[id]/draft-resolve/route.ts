@@ -5,8 +5,9 @@ import { autoFillDraftStragglers, maybeAdvanceDraftStep } from "@/lib/server/dra
 import { ApiError, withApiErrorHandling } from "@/lib/errors";
 
 // maybeAdvanceDraftStep can transitively call startNextRound -> getKeyAttributes
-// (up to 2 sequential DeepSeek calls) once the last category step is picked —
-// 60s is Vercel Hobby's max configurable duration, well above the ~20s worst case.
+// (up to 2 sequential DeepSeek calls, each bounded by AI_TIMEOUT_MS) once the
+// last category step is picked — ~12s worst case; 60s is Vercel Hobby's max
+// configurable duration, kept as a generous ceiling.
 export const maxDuration = 60;
 
 export const POST = withApiErrorHandling(

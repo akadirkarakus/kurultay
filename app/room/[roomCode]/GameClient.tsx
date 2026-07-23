@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { api } from "@/lib/client/api";
 import { useGameStore } from "@/store/useGameStore";
+import { ExitGameButton } from "@/components/shared/ExitGameButton";
+import { HowToPlayButton } from "@/components/shared/HowToPlayModal";
 import { LobbyScreen } from "@/components/lobby/LobbyScreen";
 import { CategoryDraftScreen } from "@/components/deck-draft/CategoryDraftScreen";
 import { RoundScreen } from "@/components/round/RoundScreen";
@@ -47,6 +49,7 @@ export function GameClient({ gameId }: { gameId: string; roomCode: string }) {
       .on("broadcast", { event: "pick_submitted" }, () => refresh())
       .on("broadcast", { event: "draft_pick_submitted" }, () => refresh())
       .on("broadcast", { event: "round_resolved" }, () => refresh())
+      .on("broadcast", { event: "commentary_ready" }, () => refresh())
       .on("broadcast", { event: "continue_ready_submitted" }, () => refresh())
       .on("broadcast", { event: "joker_used" }, () => refresh())
       .on("broadcast", { event: "joker_skipped" }, () => refresh())
@@ -80,6 +83,8 @@ export function GameClient({ gameId }: { gameId: string; roomCode: string }) {
 
   return (
     <>
+      <ExitGameButton />
+      <HowToPlayButton />
       {error && (
         <div className="bg-danger-soft px-4 py-2 text-center text-sm text-danger">{error}</div>
       )}
@@ -105,7 +110,7 @@ function GameScreen({ gameId }: { gameId: string }) {
     case "round_result":
       return <RoundResultScreen key={roundNumber} gameId={gameId} />;
     case "finished":
-      return <GameOverScreen />;
+      return <GameOverScreen gameId={gameId} />;
     default:
       return null;
   }

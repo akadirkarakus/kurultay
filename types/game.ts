@@ -6,6 +6,7 @@ export interface GameSummary {
   status: GameStatus;
   currentRound: number;
   maxRounds: number;
+  rematchReadyPlayerIds: string[];
 }
 
 export interface PlayerSummary {
@@ -14,6 +15,7 @@ export interface PlayerSummary {
   score: number;
   isReady: boolean;
   isHost: boolean;
+  isBot: boolean;
   jokerUsed: boolean;
   usedJoker: { key: string; name: string; targetNickname: string | null } | null;
 }
@@ -87,7 +89,7 @@ export interface RoundViewJokerWindow {
   decidedPlayerIds: string[];
   availableJokers: JokerCatalogEntry[];
   myDeck: CharacterSummary[];
-  opponents: { id: string; nickname: string }[];
+  opponents: { id: string; nickname: string; isBot: boolean }[];
 }
 
 export type RoundView = RoundViewPicking | RoundViewResolved | RoundViewJokerWindow;

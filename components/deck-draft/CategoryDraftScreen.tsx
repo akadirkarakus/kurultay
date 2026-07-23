@@ -61,10 +61,17 @@ export function CategoryDraftScreen({ gameId }: { gameId: string }) {
   const categoryLabel =
     draft.category && isCharacterCategory(draft.category) ? CATEGORY_LABELS[draft.category] : draft.category;
 
+  // Merge in our own pick optimistically — useOptimisticPick sets myPick
+  // synchronously on click, before the request even starts, so this shows
+  // our own checkmark instantly instead of waiting on the round trip through
+  // the server and back via the draft_pick_submitted broadcast.
+  const pickedPlayerIds =
+    myPick !== null ? [...new Set([...draft.pickedPlayerIds, state.me.id])] : draft.pickedPlayerIds;
+
   return (
     <main className="flex flex-1 flex-col gap-6 px-4 py-8">
       <div className="mx-auto max-w-lg text-center">
-        <p className="text-sm text-secondary-muted">
+        <p className="font-display text-xl font-bold tracking-wide text-secondary">
           Kategori {draft.stepNumber}/{draft.totalSteps}
         </p>
         <p className="mt-2 font-display text-sm tracking-wide">{categoryLabel}</p>
@@ -81,16 +88,18 @@ export function CategoryDraftScreen({ gameId }: { gameId: string }) {
         </div>
       )}
 
-      <PickWaitingBanner players={state.players} pickedPlayerIds={draft.pickedPlayerIds} />
+      <PickWaitingBanner players={state.players} pickedPlayerIds={pickedPlayerIds} />
 
       {error && <p className="text-center text-sm text-danger">{error}</p>}
 
       {myPick !== null ? (
         <p className="text-center text-secondary-soft">Seçimin gönderildi. Diğer oyuncular bekleniyor…</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+        <div className="flex flex-wrap justify-center gap-3">
           {draft.myOffer.map((c) => (
-            <CharacterCard key={c.id} character={c} disabled={submitting} onClick={() => pick(c.id)} />
+            <div key={c.id} className="w-[calc(50%-0.375rem)] sm:w-[calc(33.333%-0.5rem)] md:w-[calc(20%-0.6rem)]">
+              <CharacterCard character={c} disabled={submitting} onClick={() => pick(c.id)} />
+            </div>
           ))}
         </div>
       )}

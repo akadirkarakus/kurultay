@@ -31,7 +31,7 @@ export function CharacterCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-col overflow-hidden rounded-none border-2 text-left transition ${
+      className={`flex w-full flex-col overflow-hidden rounded-none border-2 text-left transition ${
         selected ? "border-accent shadow-[4px_4px_0_0_var(--color-accent)]" : "border-secondary"
       } ${dimmed ? "opacity-40" : ""} ${!disabled ? "hover:border-accent" : ""}`}
     >

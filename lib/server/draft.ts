@@ -2,18 +2,23 @@ import "server-only";
 import { allocateDisjointPools } from "@/lib/game-logic/allocatePools";
 import { pickDraftCategories } from "@/lib/game-logic/draftCategories";
 import { DECK_SIZE, DRAFT_OFFER_SIZE, DRAFT_STEP_DURATION_S } from "@/lib/constants";
+import { fillBotDraftPicks } from "@/lib/server/bots";
 import { startNextRound } from "@/lib/server/rounds";
 import type { supabaseAdmin } from "@/lib/supabase/admin";
+import type { Database } from "@/lib/supabase/types";
 
 type AdminClient = ReturnType<typeof supabaseAdmin>;
+type GameRow = Database["public"]["Tables"]["games"]["Row"];
 
-async function dealCategoryOffers(
+export async function dealCategoryOffers(
   admin: AdminClient,
   gameId: string,
   category: string,
 ): Promise<Record<string, string[]>> {
-  const { data: players } = await admin.from("game_players").select("id").eq("game_id", gameId);
-  const { data: characters } = await admin.from("characters").select("id").eq("category", category);
+  const [{ data: players }, { data: characters }] = await Promise.all([
+    admin.from("game_players").select("id").eq("game_id", gameId),
+    admin.from("characters").select("id").eq("category", category),
+  ]);
   return allocateDisjointPools(
     (characters ?? []).map((c) => c.id),
     (players ?? []).map((p) => p.id),
@@ -29,13 +34,17 @@ export async function startDraft(admin: AdminClient, gameId: string): Promise<vo
   const categories = pickDraftCategories();
   const offers = await dealCategoryOffers(admin, gameId, categories[0]);
 
-  for (const [playerId, offer] of Object.entries(offers)) {
-    const { error } = await admin
-      .from("game_players")
-      .update({ draft_offer: offer, deck: [] })
-      .eq("id", playerId);
-    if (error) throw error;
-  }
+  // Each update touches a distinct player row, so they run concurrently
+  // instead of one sequential round trip per player.
+  await Promise.all(
+    Object.entries(offers).map(async ([playerId, offer]) => {
+      const { error } = await admin
+        .from("game_players")
+        .update({ draft_offer: offer, deck: [] })
+        .eq("id", playerId);
+      if (error) throw error;
+    }),
+  );
 
   const deadline = new Date(Date.now() + DRAFT_STEP_DURATION_S * 1000).toISOString();
   const { error } = await admin
@@ -49,6 +58,8 @@ export async function startDraft(admin: AdminClient, gameId: string): Promise<vo
     .eq("id", gameId)
     .eq("status", "lobby");
   if (error) throw error;
+
+  await fillBotDraftPicks(admin, gameId, 1);
 }
 
 /**
@@ -61,10 +72,8 @@ export async function startDraft(admin: AdminClient, gameId: string): Promise<vo
  * with a stale draft_offer, which previously happened when those were two
  * separate sequential updates.
  */
-export async function advanceDraftStep(admin: AdminClient, gameId: string): Promise<void> {
-  const { data: game, error: gameError } = await admin.from("games").select("*").eq("id", gameId).single();
-  if (gameError || !game) throw new Error(`Game ${gameId} not found.`);
-
+export async function advanceDraftStep(admin: AdminClient, game: GameRow): Promise<void> {
+  const gameId = game.id;
   const nextStep = game.current_draft_step + 1;
   if (nextStep > DECK_SIZE) {
     await startNextRound(admin, gameId);
@@ -83,6 +92,8 @@ export async function advanceDraftStep(admin: AdminClient, gameId: string): Prom
     p_offers: offers,
   });
   if (error) throw error;
+
+  await fillBotDraftPicks(admin, gameId, nextStep);
 }
 
 /**
@@ -92,10 +103,12 @@ export async function advanceDraftStep(admin: AdminClient, gameId: string): Prom
  * step (no "used characters" exclusion needed).
  */
 export async function autoFillDraftStragglers(admin: AdminClient, gameId: string): Promise<void> {
-  const { data: game } = await admin.from("games").select("*").eq("id", gameId).single();
+  const [{ data: game }, { data: players }] = await Promise.all([
+    admin.from("games").select("*").eq("id", gameId).single(),
+    admin.from("game_players").select("*").eq("game_id", gameId),
+  ]);
   if (!game || game.status !== "deck_selection") return;
 
-  const { data: players } = await admin.from("game_players").select("*").eq("game_id", gameId);
   for (const player of players ?? []) {
     if (player.deck.length < game.current_draft_step && player.draft_offer.length > 0) {
       const choice = player.draft_offer[Math.floor(Math.random() * player.draft_offer.length)];
@@ -110,10 +123,14 @@ export async function autoFillDraftStragglers(admin: AdminClient, gameId: string
 
 /** Shared "if everyone has now picked for the current step, advance" check. */
 export async function maybeAdvanceDraftStep(admin: AdminClient, gameId: string): Promise<void> {
-  const { data: game } = await admin.from("games").select("*").eq("id", gameId).single();
+  // Both queries only need gameId, not each other's result, so they run
+  // concurrently instead of paying two sequential round trips.
+  const [{ data: game }, { data: players }] = await Promise.all([
+    admin.from("games").select("*").eq("id", gameId).single(),
+    admin.from("game_players").select("deck").eq("game_id", gameId),
+  ]);
   if (!game || game.status !== "deck_selection") return;
 
-  const { data: players } = await admin.from("game_players").select("deck").eq("game_id", gameId);
   const allPicked = (players ?? []).every((p) => p.deck.length >= game.current_draft_step);
-  if (allPicked) await advanceDraftStep(admin, gameId);
+  if (allPicked) await advanceDraftStep(admin, game);
 }
