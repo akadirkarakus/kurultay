@@ -1,25 +1,5 @@
 import type { GameStateResponse } from "@/types/game";
-
-class ApiClientError extends Error {
-  constructor(
-    message: string,
-    public code?: string,
-  ) {
-    super(message);
-  }
-}
-
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
-  });
-  const body = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new ApiClientError(body?.error ?? `Request failed (${res.status})`, body?.code);
-  }
-  return body as T;
-}
+import { ApiClientError, request } from "@/lib/client/http";
 
 export const api = {
   createGame: (nickname: string) =>

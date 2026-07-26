@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { BATTLE_ATTRIBUTES, SUPPLEMENTARY_FIELDS } from "@/lib/attributes";
 import { MAX_PLAYERS, DRAFT_OFFER_SIZE } from "@/lib/constants";
 import { CHARACTER_CATEGORIES } from "@/lib/categories";
+import { slugify } from "@/lib/slug";
 import { createAdminClient } from "@/lib/supabase/create-admin-client";
 import { loadEnvLocal } from "./load-env";
 
@@ -26,19 +27,6 @@ const CATEGORY_BY_SHEET: Record<string, string> = {
   Sanatçılar: "artist",
   Ünlüler: "celebrity",
 };
-
-const TURKISH_CHAR_MAP: Record<string, string> = {
-  ı: "i", İ: "i", ş: "s", Ş: "s", ğ: "g", Ğ: "g",
-  ü: "u", Ü: "u", ö: "o", Ö: "o", ç: "c", Ç: "c",
-};
-
-export function slugify(text: string): string {
-  const replaced = [...text].map((ch) => TURKISH_CHAR_MAP[ch] ?? ch).join("");
-  return replaced
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 export function categoryForSheet(sheetName: string): string {
   const category = CATEGORY_BY_SHEET[sheetName];

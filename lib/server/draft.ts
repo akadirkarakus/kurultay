@@ -17,7 +17,7 @@ export async function dealCategoryOffers(
 ): Promise<Record<string, string[]>> {
   const [{ data: players }, { data: characters }] = await Promise.all([
     admin.from("game_players").select("id").eq("game_id", gameId),
-    admin.from("characters").select("id").eq("category", category),
+    admin.from("characters").select("id").eq("category", category).eq("is_active", true),
   ]);
   return allocateDisjointPools(
     (characters ?? []).map((c) => c.id),

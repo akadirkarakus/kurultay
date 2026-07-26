@@ -20,6 +20,21 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Admin panel
+
+`/admin` lets you add/edit/archive characters and manage scenarios without
+touching `data/characters.xlsx` or running scripts. Bootstrap the first
+(super admin) account with:
+
+```bash
+npm run seed:admin -- <username> <password>
+```
+
+When adding a new character, its 27 battle attributes (plus optional
+`height_cm`/`age`) are set by uploading a JSON file rather than filling in
+each field by hand — see `data/character-attributes-template.json` for the
+expected shape (keys match `lib/attributes.ts`, one 0-100 score per key).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

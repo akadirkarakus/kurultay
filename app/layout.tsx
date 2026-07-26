@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { BackgroundMusic } from "@/components/shared/BackgroundMusic";
-import { VersionBadge } from "@/components/shared/VersionBadge";
+import { GameChrome } from "@/components/shared/GameChrome";
 import "./globals.css";
 
 // Local pixel-art font (not Google Fonts) — a scalable TrueType remake of the
@@ -29,8 +28,7 @@ export default function RootLayout({
     <html lang="tr" className={`${pixelFont.variable} h-full`}>
       <body className="min-h-full flex flex-col bg-dominant text-secondary">
         {children}
-        <BackgroundMusic />
-        <VersionBadge />
+        <GameChrome />
       </body>
     </html>
   );

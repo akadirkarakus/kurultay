@@ -18,6 +18,8 @@ export interface Database {
           attributes: Json;
           created_at: string;
           updated_at: string;
+          is_active: boolean;
+          archived_at: string | null;
         };
         Insert: Partial<Database["public"]["Tables"]["characters"]["Row"]> & {
           slug: string;
@@ -26,6 +28,37 @@ export interface Database {
           attributes: Json;
         };
         Update: Partial<Database["public"]["Tables"]["characters"]["Row"]>;
+        Relationships: [];
+      };
+      admin_users: {
+        Row: {
+          id: string;
+          username: string;
+          password_hash: string;
+          is_super_admin: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["admin_users"]["Row"]> & {
+          username: string;
+          password_hash: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["admin_users"]["Row"]>;
+        Relationships: [];
+      };
+      admin_sessions: {
+        Row: {
+          id: string;
+          admin_user_id: string;
+          token: string;
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["admin_sessions"]["Row"]> & {
+          admin_user_id: string;
+          token: string;
+          expires_at: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["admin_sessions"]["Row"]>;
         Relationships: [];
       };
       games: {

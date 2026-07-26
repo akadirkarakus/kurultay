@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "import:characters": "tsx scripts/import-characters.ts",
     "seed:scenarios": "tsx scripts/seed-scenarios.ts",
-    "seed:jokers": "tsx scripts/seed-jokers.ts"
+    "seed:jokers": "tsx scripts/seed-jokers.ts",
+    "seed:admin": "tsx scripts/seed-admin.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

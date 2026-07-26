@@ -7,18 +7,9 @@ import {
   buildCharacterRecord,
   categoryForSheet,
   readCharacterRows,
-  slugify,
 } from "@/scripts/import-characters";
 
 const EXCEL_PATH = path.join(process.cwd(), "data", "characters.xlsx");
-
-describe("slugify", () => {
-  it("lowercases, strips Turkish diacritics, and hyphenates", () => {
-    expect(slugify("Recep Tayyip Erdoğan")).toBe("recep-tayyip-erdogan");
-    expect(slugify("İnternet Ünlüleri")).toBe("internet-unluleri");
-    expect(slugify("Kıvanç Tatlıtuğ")).toBe("kivanc-tatlitug");
-  });
-});
 
 describe("categoryForSheet", () => {
   it("maps known sheets", () => {
