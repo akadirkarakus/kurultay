@@ -22,9 +22,24 @@ export function ExitGameButton() {
     <button
       type="button"
       onClick={handleExit}
-      className="fixed left-4 top-4 z-50 rounded-none border-2 border-secondary bg-surface px-3 py-2 text-xs text-secondary shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
+      aria-label="Oyundan çık"
+      title="Oyundan çık"
+      className="fixed left-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-none border-2 border-secondary bg-surface text-secondary shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
     >
-      Oyundan Çık
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+        aria-hidden="true"
+      >
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
     </button>
   );
 }

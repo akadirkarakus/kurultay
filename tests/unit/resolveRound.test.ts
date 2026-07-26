@@ -82,6 +82,31 @@ describe("computeRoundResult", () => {
     expect(result.find((r) => r.playerId === "p1")?.isWinner).toBe(false);
   });
 
+  it("adds +10 to a pick's average when the player's nickname is Erenbaba (case-insensitive)", () => {
+    const result = computeRoundResult(
+      [
+        { playerId: "p1", characterId: "c1", attributes: { intelligence: 80, physical_endurance: 80, mental_strength: 80 }, nickname: "erenbaba" },
+        { playerId: "p2", characterId: "c2", attributes: { intelligence: 85, physical_endurance: 85, mental_strength: 85 } },
+      ],
+      KEY_ATTRS,
+    );
+    // 80 + 10 = 90, beats p2's unmodified 85 average.
+    expect(result.find((r) => r.playerId === "p1")?.average).toBeCloseTo(90, 5);
+    expect(result.find((r) => r.playerId === "p1")?.isWinner).toBe(true);
+    expect(result.find((r) => r.playerId === "p2")?.isWinner).toBe(false);
+  });
+
+  it("caps the Erenbaba bonus at 98 instead of letting it exceed 98", () => {
+    const result = computeRoundResult(
+      [
+        { playerId: "p1", characterId: "c1", attributes: { intelligence: 92, physical_endurance: 92, mental_strength: 92 }, nickname: "Erenbaba" },
+      ],
+      KEY_ATTRS,
+    );
+    // 92 + 10 = 102, capped down to 98.
+    expect(result.find((r) => r.playerId === "p1")?.average).toBe(98);
+  });
+
   it("leaves picks without boosted/debuffed flags unmodified", () => {
     const result = computeRoundResult(
       [{ playerId: "p1", characterId: "c1", attributes: { intelligence: 50, physical_endurance: 50, mental_strength: 50 } }],

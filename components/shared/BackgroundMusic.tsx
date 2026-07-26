@@ -61,13 +61,47 @@ export function BackgroundMusic() {
     });
   }
 
+  const label = enabled ? "Müziği kapat" : "Müziği aç";
+
   return (
     <button
       type="button"
       onClick={toggle}
-      className="fixed bottom-4 right-4 z-50 rounded-none border-2 border-secondary bg-surface px-3 py-2 text-xs text-secondary shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
+      aria-label={label}
+      title={label}
+      className="fixed left-16 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-none border-2 border-secondary bg-surface text-secondary shadow-[3px_3px_0_0_var(--color-secondary)] transition-transform active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
     >
-      {enabled ? "Müziği Kapat" : "Müziği Aç"}
+      {enabled ? (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-5 w-5"
+          aria-hidden="true"
+        >
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+        </svg>
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-5 w-5"
+          aria-hidden="true"
+        >
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <line x1="23" y1="9" x2="17" y2="15" />
+          <line x1="17" y1="9" x2="23" y2="15" />
+        </svg>
+      )}
     </button>
   );
 }

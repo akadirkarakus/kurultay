@@ -236,6 +236,7 @@ async function broadcastRoundResolved(admin: AdminClient, gameId: string, roundI
                 jokerInfo?.used_joker_key === "value_boost" &&
                 jokerInfo?.joker_own_character_id === p.character_id,
               debuffed: jokerInfo?.debuffed_character_ids?.includes(p.character_id) ?? false,
+              nickname: jokerInfo?.nickname,
             };
           }),
           round.key_attributes,

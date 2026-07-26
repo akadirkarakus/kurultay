@@ -9,6 +9,8 @@ export interface RoundPickInput {
   boosted?: boolean;
   /** True if this pick's card was debuffed by the value_debuff joker. */
   debuffed?: boolean;
+  /** This pick's player's nickname, used for the Erenbaba bonus. */
+  nickname?: string;
 }
 
 export interface RoundPickResult {
@@ -38,6 +40,7 @@ export function computeRoundResult(
     let average = sum / keyAttributes.length;
     if (pick.boosted) average *= 1 + JOKER_VALUE_MODIFIER;
     if (pick.debuffed) average *= 1 - JOKER_VALUE_MODIFIER;
+    if (pick.nickname?.toLowerCase() === "erenbaba") average = Math.min(average + 10, 98);
     return { ...pick, average };
   });
 

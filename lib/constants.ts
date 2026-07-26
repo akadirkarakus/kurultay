@@ -25,4 +25,4 @@ export const ROOM_CODE_LENGTH = 6;
 export const ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 /** Fixed nicknames for the 2 AI bots seated in single-player mode. */
-export const BOT_NICKNAMES = ["Atlas", "Zeynep"] as const;
+export const BOT_NICKNAMES = ["Zeynep", "Yaren"] as const;

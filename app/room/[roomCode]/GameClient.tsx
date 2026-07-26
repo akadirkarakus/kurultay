@@ -5,7 +5,6 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 import { api } from "@/lib/client/api";
 import { useGameStore } from "@/store/useGameStore";
 import { ExitGameButton } from "@/components/shared/ExitGameButton";
-import { HowToPlayButton } from "@/components/shared/HowToPlayModal";
 import { LobbyScreen } from "@/components/lobby/LobbyScreen";
 import { CategoryDraftScreen } from "@/components/deck-draft/CategoryDraftScreen";
 import { RoundScreen } from "@/components/round/RoundScreen";
@@ -84,7 +83,6 @@ export function GameClient({ gameId }: { gameId: string; roomCode: string }) {
   return (
     <>
       <ExitGameButton />
-      <HowToPlayButton />
       {error && (
         <div className="bg-danger-soft px-4 py-2 text-center text-sm text-danger">{error}</div>
       )}
