@@ -57,12 +57,20 @@ export const scenarioAttributesSchema = z
     message: "Nitelikler birbirinden farklı olmalı.",
   });
 
+const scenarioTextField = z.string().trim().min(1).max(2000);
+
 export const scenarioSchema = z.object({
-  text: z.string().trim().min(1).max(2000),
+  text: scenarioTextField,
   suggestedAttributes: scenarioAttributesSchema,
 });
 
 export type ScenarioInput = z.infer<typeof scenarioSchema>;
+
+export const scenarioTextSchema = z.object({
+  text: scenarioTextField,
+});
+
+export type ScenarioTextInput = z.infer<typeof scenarioTextSchema>;
 
 export const adminLoginSchema = z.object({
   username: z.string().trim().min(1),

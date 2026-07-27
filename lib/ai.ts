@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import { AI_TIMEOUT_MS, KEY_ATTRIBUTES_PER_ROUND } from "@/lib/constants";
-import { BATTLE_ATTRIBUTE_KEYS, type BattleAttributeKey, isBattleAttributeKey } from "@/lib/attributes";
+import { BATTLE_ATTRIBUTES, BATTLE_ATTRIBUTE_KEYS, type BattleAttributeKey, isBattleAttributeKey } from "@/lib/attributes";
+import {
+  characterAttributesJsonSchema,
+  type CharacterAttributesInput,
+} from "@/lib/validation/adminSchemas";
 
 let defaultClient: OpenAI | null = null;
 
@@ -133,6 +137,35 @@ export async function getKeyAttributes(
     throw new Error(`Fallback attributes are invalid: ${JSON.stringify(fallbackAttributes)}`);
   }
   return fallback;
+}
+
+/**
+ * Same DeepSeek call/prompt/validation as getKeyAttributes (reuses
+ * requestAttributes/validateAttributes directly), for the admin "AI ile
+ * doldur" button when authoring a new scenario. Unlike getKeyAttributes,
+ * there's no existing scenario to fall back to yet, so this returns null on
+ * failure and the admin picks the 5 attributes manually instead.
+ */
+export async function getSuggestedScenarioAttributes(
+  scenarioText: string,
+  client: ChatCompletionsClient = getDefaultClient(),
+): Promise<BattleAttributeKey[] | null> {
+  try {
+    const first = validateAttributes(await requestAttributes(client, scenarioText));
+    if (first) return first;
+
+    const second = validateAttributes(
+      await requestAttributes(
+        client,
+        scenarioText,
+        `Your previous answer was invalid. Return EXACTLY ${KEY_ATTRIBUTES_PER_ROUND} unique attribute keys, copied verbatim from the provided list.`,
+      ),
+    );
+    if (second) return second;
+  } catch (error) {
+    console.error("getSuggestedScenarioAttributes: DeepSeek call failed.", error);
+  }
+  return null;
 }
 
 export interface CommentaryPickInput {
@@ -279,4 +312,113 @@ export async function getWinnerCommentary(
   }
 
   return fallbackCommentary(picks);
+}
+
+const CHARACTER_ATTRIBUTES_TOOL_NAME = "suggest_character_attributes";
+
+const characterAttributeProperties = Object.fromEntries(
+  BATTLE_ATTRIBUTE_KEYS.map((key) => [key, { type: "integer", minimum: 0, maximum: 100 }]),
+);
+
+const characterAttributesTool = {
+  type: "function" as const,
+  function: {
+    name: CHARACTER_ATTRIBUTES_TOOL_NAME,
+    description:
+      "Assign a 0-100 score to every battle attribute for the given character, based on real-world " +
+      "or fictional knowledge of them.",
+    parameters: {
+      type: "object",
+      properties: {
+        ...characterAttributeProperties,
+        height_cm: { type: "integer", minimum: 50, maximum: 250 },
+        age: { type: "integer", minimum: 0, maximum: 130 },
+      },
+      required: [...BATTLE_ATTRIBUTE_KEYS],
+      additionalProperties: false,
+    },
+  },
+};
+
+function characterAttributesSystemPrompt(): string {
+  const attributeList = BATTLE_ATTRIBUTES.map((a) => `${a.key} (${a.label})`).join(", ");
+  return (
+    "You are assigning stats for a Turkish character-battle card game. Given a character's name " +
+    "and category, assign a 0-100 score to EVERY one of the battle attributes listed below, based " +
+    "on your real-world or fictional knowledge of that specific character (politician, historical " +
+    "figure, athlete, actor, or a movie/TV/internet character). 50 represents an average person — " +
+    "use the full 0-100 range where justified rather than clustering everything near 50. If the " +
+    "character is fictional, base scores on their portrayal; if you have little knowledge of them, " +
+    "still make your best reasonable estimate. Return the exact English snake_case keys below " +
+    `verbatim, never translated or altered.\n\nAttributes: ${attributeList}\n\n` +
+    "Also provide height_cm and age if they can be reasonably known or estimated; omit them only " +
+    "if truly unknowable (e.g. an animal, or a character with no defined age)."
+  );
+}
+
+async function requestCharacterAttributes(
+  client: ChatCompletionsClient,
+  name: string,
+  categoryLabel: string,
+  correction?: string,
+): Promise<unknown> {
+  const messages: Array<{ role: "system" | "user"; content: string }> = [
+    { role: "system", content: characterAttributesSystemPrompt() },
+    { role: "user", content: `Karakter: ${name}\nKategori: ${categoryLabel}` },
+  ];
+  if (correction) messages.push({ role: "user", content: correction });
+
+  const response = (await client.chat.completions.create(
+    {
+      model: "deepseek-chat",
+      messages,
+      tools: [characterAttributesTool],
+      tool_choice: { type: "function", function: { name: CHARACTER_ATTRIBUTES_TOOL_NAME } },
+    } as Parameters<OpenAI["chat"]["completions"]["create"]>[0],
+    { timeout: AI_TIMEOUT_MS } as Parameters<OpenAI["chat"]["completions"]["create"]>[1],
+  )) as {
+    choices?: Array<{ message?: { tool_calls?: Array<{ function: { arguments: string } }> } }>;
+  };
+
+  const call = response.choices?.[0]?.message?.tool_calls?.[0];
+  if (!call) return null;
+  try {
+    return JSON.parse(call.function.arguments);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Drafts a full set of battle attributes for a new character from just its
+ * name and category, calling DeepSeek at most twice. Unlike getKeyAttributes/
+ * getWinnerCommentary, there is no deterministic fallback here — a wrong
+ * guess at "how charismatic is this person" has no sensible default — so
+ * this returns null on failure and the caller must let the admin fill the
+ * values in manually rather than silently guessing.
+ */
+export async function getSuggestedCharacterAttributes(
+  name: string,
+  categoryLabel: string,
+  client: ChatCompletionsClient = getDefaultClient(),
+): Promise<CharacterAttributesInput | null> {
+  try {
+    const first = characterAttributesJsonSchema.safeParse(
+      await requestCharacterAttributes(client, name, categoryLabel),
+    );
+    if (first.success) return first.data;
+
+    const second = characterAttributesJsonSchema.safeParse(
+      await requestCharacterAttributes(
+        client,
+        name,
+        categoryLabel,
+        "Önceki cevabın geçersizdi. Tüm nitelikler için 0-100 arası bir tam sayı ver, istenen anahtarları verilen şekilde kullan.",
+      ),
+    );
+    if (second.success) return second.data;
+  } catch (error) {
+    console.error("getSuggestedCharacterAttributes: DeepSeek call failed.", error);
+  }
+  return null;
 }

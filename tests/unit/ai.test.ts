@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getKeyAttributes,
+  getSuggestedCharacterAttributes,
+  getSuggestedScenarioAttributes,
   getWinnerCommentary,
   fallbackCommentary,
   type ChatCompletionsClient,
   type CommentaryPickInput,
 } from "@/lib/ai";
+import { BATTLE_ATTRIBUTE_KEYS } from "@/lib/attributes";
 
 const FALLBACK = ["intelligence", "physical_endurance", "mental_strength", "courage", "leadership"];
 
@@ -83,6 +86,55 @@ describe("getKeyAttributes", () => {
   });
 });
 
+describe("getSuggestedScenarioAttributes", () => {
+  it("returns the model's attributes on a valid first response", async () => {
+    const client = mockClient(
+      toolCallResponse({
+        attributes: ["leadership", "courage", "physical_strength", "composure", "diligence"],
+      }),
+    );
+    const result = await getSuggestedScenarioAttributes("Bir savaş senaryosu", client);
+    expect(result).toEqual(["leadership", "courage", "physical_strength", "composure", "diligence"]);
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once on invalid keys, then accepts the corrected response", async () => {
+    const client = mockClient(
+      toolCallResponse({
+        attributes: ["not_a_real_key", "leadership", "courage", "composure", "diligence"],
+      }),
+      toolCallResponse({
+        attributes: ["leadership", "courage", "humor", "composure", "diligence"],
+      }),
+    );
+    const result = await getSuggestedScenarioAttributes("Bir senaryo", client);
+    expect(result).toEqual(["leadership", "courage", "humor", "composure", "diligence"]);
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null after two invalid responses (no fallback exists for a brand-new scenario)", async () => {
+    const client = mockClient(
+      toolCallResponse({ attributes: ["nope", "leadership", "courage", "composure", "diligence"] }),
+      toolCallResponse({ attributes: ["still_nope"] }),
+    );
+    const result = await getSuggestedScenarioAttributes("Bir senaryo", client);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the call throws (timeout/network error)", async () => {
+    const create = vi.fn().mockRejectedValue(new Error("timeout"));
+    const client: ChatCompletionsClient = { chat: { completions: { create } } };
+    const result = await getSuggestedScenarioAttributes("Bir senaryo", client);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when no tool call is present in the response", async () => {
+    const client = mockClient({ choices: [{ message: {} }] }, { choices: [{ message: {} }] });
+    const result = await getSuggestedScenarioAttributes("Bir senaryo", client);
+    expect(result).toBeNull();
+  });
+});
+
 const SOLE_WINNER: CommentaryPickInput[] = [
   { characterName: "Messi", playerNickname: "Ali", average: 90, isWinner: true, isAutoPick: false },
   { characterName: "Ronaldo", playerNickname: "Veli", average: 70, isWinner: false, isAutoPick: false },
@@ -137,6 +189,53 @@ describe("getWinnerCommentary", () => {
     const client = mockClient({ choices: [{ message: {} }] }, { choices: [{ message: {} }] });
     const result = await getWinnerCommentary("Senaryo", ["creativity"], SOLE_WINNER, client);
     expect(result).toBe(fallbackCommentary(SOLE_WINNER));
+  });
+});
+
+function fullAttributes(overrides: Record<string, number> = {}): Record<string, number> {
+  return { ...Object.fromEntries(BATTLE_ATTRIBUTE_KEYS.map((key) => [key, 50])), ...overrides };
+}
+
+describe("getSuggestedCharacterAttributes", () => {
+  it("returns the model's attributes on a valid first response", async () => {
+    const suggestion = fullAttributes({ leadership: 80, humor: 20 });
+    const client = mockClient(toolCallResponse(suggestion));
+    const result = await getSuggestedCharacterAttributes("Test Karakter", "Siyasetçiler", client);
+    expect(result).toEqual(suggestion);
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries once on an invalid response, then accepts the correction", async () => {
+    const valid = fullAttributes({ leadership: 65 });
+    const client = mockClient(
+      toolCallResponse({ leadership: 150 }), // out of range, and missing every other key
+      toolCallResponse(valid),
+    );
+    const result = await getSuggestedCharacterAttributes("Test Karakter", "Ünlüler", client);
+    expect(result).toEqual(valid);
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null after two invalid responses (no deterministic fallback exists)", async () => {
+    const client = mockClient(
+      toolCallResponse({ leadership: 200 }),
+      toolCallResponse({ leadership: -5 }),
+    );
+    const result = await getSuggestedCharacterAttributes("Test Karakter", "Sporcular", client);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the call throws (timeout/network error)", async () => {
+    const create = vi.fn().mockRejectedValue(new Error("timeout"));
+    const client: ChatCompletionsClient = { chat: { completions: { create } } };
+    const result = await getSuggestedCharacterAttributes("Test Karakter", "Tarihi Kişilikler", client);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when no tool call is present in the response", async () => {
+    const client = mockClient({ choices: [{ message: {} }] }, { choices: [{ message: {} }] });
+    const result = await getSuggestedCharacterAttributes("Test Karakter", "Oyuncular", client);
+    expect(result).toBeNull();
   });
 });
 

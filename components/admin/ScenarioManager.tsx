@@ -23,6 +23,8 @@ export function ScenarioManager({ initialScenarios }: ScenarioManagerProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<AdminScenario | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   function startCreate() {
     setEditing(null);
@@ -30,6 +32,7 @@ export function ScenarioManager({ initialScenarios }: ScenarioManagerProps) {
     setText("");
     setSlots([...EMPTY_SLOTS]);
     setFormError(null);
+    setAiError(null);
   }
 
   function startEdit(scenario: AdminScenario) {
@@ -38,6 +41,7 @@ export function ScenarioManager({ initialScenarios }: ScenarioManagerProps) {
     setText(scenario.text);
     setSlots([...scenario.suggested_attributes]);
     setFormError(null);
+    setAiError(null);
   }
 
   function cancelForm() {
@@ -47,6 +51,23 @@ export function ScenarioManager({ initialScenarios }: ScenarioManagerProps) {
 
   function handleSlotChange(index: number, value: string) {
     setSlots((prev) => prev.map((s, i) => (i === index ? value : s)));
+  }
+
+  async function handleAiFill() {
+    setAiError(null);
+    if (!text.trim()) {
+      setAiError("Önce senaryo metnini yazın.");
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const { attributes } = await adminApi.suggestScenarioAttributes(text.trim());
+      setSlots(attributes);
+    } catch (err) {
+      setAiError(err instanceof ApiClientError ? err.message : "DeepSeek önerisi alınamadı.");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -105,7 +126,10 @@ export function ScenarioManager({ initialScenarios }: ScenarioManagerProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl tracking-wide">Senaryolar</h1>
+        <div>
+          <h1 className="font-display text-xl tracking-wide">Senaryolar</h1>
+          <p className="text-sm text-secondary-soft">{scenarios.length} senaryo</p>
+        </div>
         {!isCreating && (
           <button
             type="button"
@@ -134,6 +158,19 @@ export function ScenarioManager({ initialScenarios }: ScenarioManagerProps) {
               className="w-full rounded-none border-2 border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
             />
           </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleAiFill}
+              disabled={aiLoading}
+              className="rounded-none border-2 border-secondary bg-accent px-3 py-2 text-xs text-white shadow-[2px_2px_0_0_var(--color-secondary)] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-50"
+            >
+              {aiLoading ? "DeepSeek düşünüyor…" : "DeepSeek ile Doldur"}
+            </button>
+            <span className="text-xs text-secondary-soft">Senaryoya göre 5 öneriyi otomatik seçer.</span>
+          </div>
+          {aiError && <p className="text-sm text-danger">{aiError}</p>}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
             {slots.map((value, index) => (

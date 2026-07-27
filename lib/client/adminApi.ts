@@ -15,6 +15,11 @@ export const adminApi = {
     ),
   createCharacter: (formData: FormData) =>
     requestFormData<{ character: AdminCharacter }>("/api/admin/characters", formData),
+  suggestCharacterAttributes: (name: string, category: string) =>
+    request<{ attributes: Record<string, number> }>("/api/admin/characters/suggest-attributes", {
+      method: "POST",
+      body: JSON.stringify({ name, category }),
+    }),
   updateCharacter: (
     id: string,
     body: { name?: string; category?: string; attributes?: Record<string, number> },
@@ -34,6 +39,11 @@ export const adminApi = {
     request<{ character: AdminCharacter }>(`/api/admin/characters/${id}/unarchive`, { method: "POST" }),
 
   listScenarios: () => request<{ scenarios: AdminScenario[] }>("/api/admin/scenarios"),
+  suggestScenarioAttributes: (text: string) =>
+    request<{ attributes: string[] }>("/api/admin/scenarios/suggest-attributes", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
   createScenario: (body: { text: string; suggestedAttributes: string[] }) =>
     request<{ scenario: AdminScenario }>("/api/admin/scenarios", {
       method: "POST",

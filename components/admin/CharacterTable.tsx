@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { adminApi } from "@/lib/client/adminApi";
 import { ApiClientError } from "@/lib/client/http";
 import { BATTLE_ATTRIBUTES, SUPPLEMENTARY_FIELDS } from "@/lib/attributes";
@@ -31,6 +31,44 @@ export function CharacterTable({ initialCharacters }: CharacterTableProps) {
   const [pendingArchive, setPendingArchive] = useState<AdminCharacter | null>(null);
   const jsonInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const imageInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // Debounced auto-save state per field (keyed "<characterId>:<fieldKey>").
+  // Relying on onBlur alone lost edits when a user typed a value and then
+  // immediately reloaded/navigated away before ever clicking out of the
+  // field — blur never fires in that case, so nothing was ever sent. Every
+  // keystroke (re)schedules a save a short delay later regardless of blur;
+  // blur still flushes it immediately for the normal "click away" case.
+  const pendingSavesRef = useRef<Record<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>>(
+    {},
+  );
+
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (Object.keys(pendingSavesRef.current).length > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  function scheduleFieldSave(fieldKey: string, run: () => void, delayMs = 600) {
+    const pending = pendingSavesRef.current[fieldKey];
+    if (pending) clearTimeout(pending.timer);
+    const timer = setTimeout(() => {
+      delete pendingSavesRef.current[fieldKey];
+      run();
+    }, delayMs);
+    pendingSavesRef.current[fieldKey] = { timer, run };
+  }
+
+  function flushFieldSave(fieldKey: string) {
+    const pending = pendingSavesRef.current[fieldKey];
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    delete pendingSavesRef.current[fieldKey];
+    pending.run();
+  }
 
   function setStatus(id: string, status: RowStatus) {
     setRowStatus((prev) => ({ ...prev, [id]: status }));
@@ -69,10 +107,14 @@ export function CharacterTable({ initialCharacters }: CharacterTableProps) {
     }
   }
 
-  function handleNameBlur(character: AdminCharacter, value: string) {
+  function commitName(character: AdminCharacter, value: string) {
     const trimmed = value.trim();
     if (!trimmed || trimmed === character.name) return;
     void saveField(character, { name: trimmed }, { name: trimmed }, { name: character.name });
+  }
+
+  function handleNameChange(character: AdminCharacter, value: string) {
+    scheduleFieldSave(`${character.id}:name`, () => commitName(character, value));
   }
 
   function handleCategoryChange(character: AdminCharacter, value: string) {
@@ -80,7 +122,7 @@ export function CharacterTable({ initialCharacters }: CharacterTableProps) {
     void saveField(character, { category: value }, { category: value }, { category: character.category });
   }
 
-  function handleAttributeBlur(character: AdminCharacter, key: string, rawValue: string) {
+  function commitAttribute(character: AdminCharacter, key: string, rawValue: string) {
     if (rawValue.trim() === "") return;
     const value = Number(rawValue);
     const previous = character.attributes[key];
@@ -92,6 +134,10 @@ export function CharacterTable({ initialCharacters }: CharacterTableProps) {
       { attributes: nextAttributes },
       { attributes: { ...nextAttributes, [key]: previous } },
     );
+  }
+
+  function handleAttributeChange(character: AdminCharacter, key: string, rawValue: string) {
+    scheduleFieldSave(`${character.id}:${key}`, () => commitAttribute(character, key, rawValue));
   }
 
   async function handleImageChange(character: AdminCharacter, file: File) {
@@ -231,7 +277,8 @@ export function CharacterTable({ initialCharacters }: CharacterTableProps) {
                       <input
                         key={`${character.id}:${character.name}`}
                         defaultValue={character.name}
-                        onBlur={(e) => handleNameBlur(character, e.target.value)}
+                        onChange={(e) => handleNameChange(character, e.target.value)}
+                        onBlur={() => flushFieldSave(`${character.id}:name`)}
                         className="w-36 rounded-none border-2 border-line bg-surface px-2 py-1 text-sm outline-none focus:border-accent"
                       />
                     </div>
@@ -257,7 +304,8 @@ export function CharacterTable({ initialCharacters }: CharacterTableProps) {
                         max={100}
                         key={`${character.id}:${attr.key}:${character.attributes[attr.key]}`}
                         defaultValue={character.attributes[attr.key] ?? ""}
-                        onBlur={(e) => handleAttributeBlur(character, attr.key, e.target.value)}
+                        onChange={(e) => handleAttributeChange(character, attr.key, e.target.value)}
+                        onBlur={() => flushFieldSave(`${character.id}:${attr.key}`)}
                         className="w-16 rounded-none border-2 border-line px-2 py-1 text-sm outline-none focus:border-accent"
                       />
                     </td>
@@ -268,7 +316,8 @@ export function CharacterTable({ initialCharacters }: CharacterTableProps) {
                         type="number"
                         key={`${character.id}:${field.key}:${character.attributes[field.key]}`}
                         defaultValue={character.attributes[field.key] ?? ""}
-                        onBlur={(e) => handleAttributeBlur(character, field.key, e.target.value)}
+                        onChange={(e) => handleAttributeChange(character, field.key, e.target.value)}
+                        onBlur={() => flushFieldSave(`${character.id}:${field.key}`)}
                         className="w-16 rounded-none border-2 border-line px-2 py-1 text-sm outline-none focus:border-accent"
                       />
                     </td>
